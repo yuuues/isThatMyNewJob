@@ -118,6 +118,16 @@ mark {
   font-size: 0.8em;
 }
 
+/* El selector de tema vive en la navegación, no en un formulario. Pico estiliza los
+   <select> para formularios verticales: ancho completo y margen inferior, dos valores
+   que dentro de <nav> partirían la barra en dos líneas. Se cancelan aquí, y de paso se
+   baja un punto el tamaño para que no pese más que los enlaces que tiene al lado. */
+nav select {
+  width: auto;
+  margin-bottom: 0;
+  font-size: 0.85em;
+}
+
 /* HTMX marca en vuelo el elemento que disparó la petición. Sirve de aviso de que
    algo está pasando y evita el doble clic sin darse cuenta. */
 .htmx-request,
