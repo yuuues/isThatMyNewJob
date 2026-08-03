@@ -13,7 +13,18 @@ class Settings(BaseSettings):
     jsearch_api_key: str = ""
 
     proveedor_clasificacion: Literal["gemini", "deepseek"] = "gemini"
-    modelo_gemini: str = "gemini-2.5-flash"
+
+    # Dos modelos distintos a propósito, porque las dos tareas no se parecen en nada.
+    #
+    # Clasificar son ~100 llamadas al día de texto plano con salida estructurada: manda
+    # el precio. Flash-Lite tiene capa gratuita y cuesta $0.15/$1.25 por millón de
+    # tokens, frente a los $0.75/$3.75 de Flash, que además no tiene capa gratuita.
+    #
+    # Extraer el perfil es UNA llamada en la vida del proyecto, multimodal sobre el PDF,
+    # y de ella depende todo lo demás: un perfil mal extraído envenena cada clasificación
+    # posterior. Ahí el precio es irrelevante y se usa el modelo bueno.
+    modelo_gemini: str = "gemini-3.5-flash-lite"
+    modelo_perfil: str = "gemini-3.6-flash"
     modelo_deepseek: str = "deepseek-chat"
 
     # El plan gratuito son 200 créditos/mes con límite duro. Se deja margen para

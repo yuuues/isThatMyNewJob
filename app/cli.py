@@ -135,7 +135,7 @@ def comando_cv(args) -> int:
         # Perezoso a propósito: si el PDF no ha cambiado no se llama al modelo, y
         # entonces tampoco hace falta GEMINI_API_KEY.
         cliente = crear_cliente(settings.gemini_api_key)
-        return extrae_perfil(pdf, cliente=cliente, modelo=settings.modelo_gemini)
+        return extrae_perfil(pdf, cliente=cliente, modelo=settings.modelo_perfil)
 
     with crear_sesion(engine) as sesion:
         resultado = sincroniza_perfil(sesion, pdf, ruta=str(args.pdf), extractor=extrae)

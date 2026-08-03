@@ -20,3 +20,15 @@ def test_settings_tienen_valores_por_defecto(monkeypatch):
     assert settings.proveedor_clasificacion == "gemini"
     assert settings.max_clasificaciones_por_run == 200
     assert settings.ruta_bd == "data/app.db"
+
+
+def test_los_dos_modelos_de_gemini_son_independientes(monkeypatch):
+    """Clasificar y extraer el CV tienen exigencias opuestas: volumen barato frente a
+    una única llamada donde manda la calidad. Compartir modelo obliga a elegir mal."""
+    monkeypatch.setenv("MODELO_GEMINI", "gemini-3.1-flash-lite")
+    monkeypatch.setenv("MODELO_PERFIL", "gemini-3.6-flash")
+
+    settings = Settings()
+
+    assert settings.modelo_gemini == "gemini-3.1-flash-lite"
+    assert settings.modelo_perfil == "gemini-3.6-flash"
