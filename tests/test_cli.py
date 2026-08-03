@@ -151,3 +151,13 @@ def test_resubir_el_mismo_cv_no_necesita_credenciales_de_gemini(cv, tmp_path, mo
 
     assert cli.comando_cv(ArgsCv(pdf)) == 0
     assert cv.clientes == clientes_tras_la_primera
+
+
+def test_jsearch_necesita_clave_y_sesion(sesion):
+    """Sin sesión no hay dónde llevar el cupo mensual, así que la fuente se salta:
+    construirla sin presupuesto se gastaría los 200 créditos a mitad de mes."""
+    con_clave = Settings(jsearch_api_key="k")
+
+    assert construye_fuentes(["jsearch"], con_clave, sesion=None) == []
+    assert construye_fuentes(["jsearch"], Settings(jsearch_api_key=""), sesion=sesion) == []
+    assert [f.nombre for f in construye_fuentes(["jsearch"], con_clave, sesion=sesion)] == ["jsearch"]

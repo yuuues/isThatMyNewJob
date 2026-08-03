@@ -8,17 +8,36 @@ No es un clasificador de currículums: es su inverso. Se clasifican ofertas cont
 
 ## Estado
 
-En diseño. Ver [el spec](docs/superpowers/specs/2026-08-03-clasificador-ofertas-design.md).
+Pipeline funcionando por línea de comandos: ingesta, deduplicación, prefiltro y
+clasificación. La interfaz web está sin construir. Ver
+[el spec](docs/superpowers/specs/2026-08-03-clasificador-ofertas-design.md).
 
-## Stack previsto
+## Stack
 
-Python 3.12 en un único contenedor Docker, para uso local. FastAPI + Jinja2 + HTMX,
-SQLite, APScheduler. Gemini para la extracción del perfil desde el PDF y para clasificar;
-DeepSeek disponible como proveedor alternativo.
+Python 3.12 en un único contenedor Docker, para uso local. SQLite, APScheduler.
+Gemini para la extracción del perfil desde el PDF y para clasificar; DeepSeek
+disponible como proveedor alternativo.
 
 ## Fuentes
 
-Adzuna (España), Remotive y Arbeitnow (remoto internacional). Sin scraping.
+Sin scraping. Todas las cifras de abajo están medidas contra las APIs reales,
+no tomadas de su documentación.
+
+| Fuente | Cobertura | Descripción | Coste |
+|---|---|---|---|
+| JSearch | España y resto vía Google for Jobs: agrega LinkedIn, Glassdoor, Tecnoempleo, Jooble | **Completa** (mediana 1994 caracteres) | 200 créditos/mes, límite duro. 1 crédito por búsqueda y run |
+| Adzuna | España | **Cortada a 500 caracteres** por la propia API | Gratis, registro |
+| Remotive | Remoto internacional | Completa | Gratis, sin clave |
+| Arbeitnow | Remoto europeo, sobre todo alemán | Completa | Gratis, sin clave |
+
+Dos consecuencias prácticas:
+
+- **Adzuna sirve para descubrir, no para clasificar a fondo.** Sus ofertas se marcan
+  como truncadas y el prompt avisa al modelo de que no está viendo los requisitos,
+  para que no confunda "no lo veo" con "el puesto no lo pide".
+- **JSearch lleva presupuesto mensual persistido.** Con run diario, cada búsqueda que
+  la use cuesta unos 30 créditos al mes: caben 5 o 6. Al agotarse, la fuente se salta
+  y las demás siguen funcionando. Configurable con `JSEARCH_LIMITE_MENSUAL`.
 
 ## El CV y el perfil
 

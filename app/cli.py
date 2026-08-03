@@ -49,14 +49,35 @@ def carga_semilla(sesion: Session, ruta: Path) -> None:
     sesion.commit()
 
 
-def construye_fuentes(nombres: list[str], settings: Settings) -> list:
+def construye_fuentes(
+    nombres: list[str], settings: Settings, sesion: Session | None = None
+) -> list:
     """Construye las fuentes solicitadas, saltando las que no tienen credenciales.
 
-    Adzuna sin claves no debe tumbar el run: las otras dos siguen funcionando.
+    Adzuna sin claves no debe tumbar el run: las demás siguen funcionando.
+
+    JSearch necesita además una sesión, porque su cupo mensual vive en la base de
+    datos. Sin sesión se salta en vez de construirse sin presupuesto: una fuente de
+    cupo duro sin contador se lo gasta entero y deja de servir a mitad de mes.
     """
     fuentes = []
     for nombre in dict.fromkeys(nombres):
-        if nombre == "adzuna":
+        if nombre == "jsearch":
+            if not settings.jsearch_api_key or sesion is None:
+                continue
+            from app.presupuesto import PresupuestoMensual
+            from app.sources.jsearch import JSearchSource
+
+            fuentes.append(
+                JSearchSource(
+                    api_key=settings.jsearch_api_key,
+                    paginas=settings.jsearch_paginas,
+                    presupuesto=PresupuestoMensual(
+                        sesion, "jsearch", limite=settings.jsearch_limite_mensual
+                    ),
+                )
+            )
+        elif nombre == "adzuna":
             if not (settings.adzuna_app_id and settings.adzuna_app_key):
                 continue
             from app.sources.adzuna import AdzunaSource
@@ -150,7 +171,7 @@ def comando_run(args) -> int:
 
         run = ejecuta_run(
             sesion,
-            fuentes=construye_fuentes(nombres_fuentes, settings),
+            fuentes=construye_fuentes(nombres_fuentes, settings, sesion),
             queries=queries,
             provider=crear_provider(settings),
             max_clasificaciones=settings.max_clasificaciones_por_run,

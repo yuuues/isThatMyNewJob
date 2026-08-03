@@ -9,14 +9,31 @@ preferencias:
     Prefiero producto sobre consultoría.
     No me interesan puestos con guardias 24/7.
 
+# Sobre el reparto de fuentes:
+#
+#   jsearch    Descripción COMPLETA (mediana de 1994 caracteres medida sobre datos
+#              reales) y agrega LinkedIn, Glassdoor, Tecnoempleo y Jooble. Es la
+#              única con cupo: 200 créditos/mes de límite duro, 1 crédito por
+#              búsqueda y run. Con run diario, cada búsqueda que la use cuesta unos
+#              30 créditos al mes, así que caben 5 o 6 como mucho. Resérvala para
+#              las que de verdad te importan.
+#   adzuna     Gratis y con buena cobertura de España, pero corta las descripciones
+#              a 500 caracteres: sirve para descubrir, no para clasificar a fondo.
+#   remotive   Sólo remoto internacional. Gratis, sin clave, una descarga por run.
+#   arbeitnow  Remoto europeo, mayoritariamente alemán. Gratis, sin clave.
+
 busquedas:
   - nombre: PHP senior remoto
     texto: php senior
     pais: es
     solo_remoto: true
-    fuentes: [adzuna, remotive, arbeitnow]
+    fuentes: [jsearch, adzuna, remotive, arbeitnow]
   - nombre: Backend Madrid
     texto: backend developer
     pais: es
     ubicacion: Madrid
+    fuentes: [jsearch, adzuna]
+  - nombre: Laravel España
+    texto: laravel
+    pais: es
     fuentes: [adzuna]

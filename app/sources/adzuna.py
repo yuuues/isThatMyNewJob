@@ -2,13 +2,10 @@ from datetime import datetime
 
 import httpx
 
-from app.dedup import normaliza
 from app.limitador import LimitadorPorHost
-from app.schemas import Modalidad, RawJob, SearchQuery
+from app.schemas import RawJob, SearchQuery
 from app.sources.base import FuenteConFiltroEnServidor
-
-_PALABRAS_REMOTO = ("remoto", "teletrabajo", "remote", "full remote", "en remoto")
-_PALABRAS_HIBRIDO = ("hibrido", "híbrido", "hybrid", "semipresencial")
+from app.sources.comun import detecta_modalidad
 
 # Verificado contra la API real el 2026-08-03: las descripciones llegan cortadas a
 # 500 caracteres. No es configurable ni hay un campo con el texto completo.
@@ -17,16 +14,6 @@ _LIMITE_DESCRIPCION = 500
 
 def url_api(pais: str) -> str:
     return f"https://api.adzuna.com/v1/api/jobs/{pais}/search/1"
-
-
-def detecta_modalidad(texto: str) -> Modalidad:
-    """Adzuna no publica la modalidad como campo, así que se infiere del texto."""
-    normalizado = normaliza(texto)
-    if any(normaliza(p) in normalizado for p in _PALABRAS_HIBRIDO):
-        return "hibrido"
-    if any(normaliza(p) in normalizado for p in _PALABRAS_REMOTO):
-        return "remoto"
-    return "desconocida"
 
 
 class AdzunaSource(FuenteConFiltroEnServidor):

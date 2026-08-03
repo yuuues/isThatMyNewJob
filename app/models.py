@@ -112,6 +112,22 @@ class Decision(Base):
     job: Mapped[Job] = relationship(back_populates="decision")
 
 
+class ConsumoFuente(Base):
+    """Peticiones consumidas por fuente y mes natural.
+
+    Existe porque JSearch tiene un cupo mensual con límite duro: sin llevar la
+    cuenta, el sistema lo agota a mitad de mes y deja de traer ofertas sin avisar.
+    """
+
+    __tablename__ = "source_usage"
+    __table_args__ = (UniqueConstraint("fuente", "periodo", name="uq_consumo_fuente_periodo"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fuente: Mapped[str] = mapped_column(String, index=True)
+    periodo: Mapped[str] = mapped_column(String)  # "YYYY-MM"
+    peticiones: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Run(Base):
     __tablename__ = "run"
 
