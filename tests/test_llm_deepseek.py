@@ -1,3 +1,4 @@
+import json
 import httpx
 import pytest
 import respx
@@ -92,3 +93,32 @@ def test_un_402_sin_saldo_tambien_es_cuota_agotada():
         DeepSeekProvider(api_key="k").complete_json(
             system="s", user="u", modelo_salida=Salida
         )
+
+
+@respx.mock
+def test_el_pensamiento_va_desactivado_por_defecto():
+    """Medido con deepseek-v4-pro: 62 s por oferta y 1612 de 1929 tokens de salida
+    gastados en razonar. Además, DeepSeek ignora `temperature` en modo pensamiento, así
+    que la temperatura 0.2 que el diseño exige no se estaba aplicando."""
+    ruta = respx.post(URL_API).mock(
+        return_value=httpx.Response(200, json=respuesta_openai('{"categoria":"x","razon":"y"}'))
+    )
+
+    DeepSeekProvider(api_key="k").complete_json(system="s", user="u", modelo_salida=Salida)
+
+    cuerpo = json.loads(ruta.calls.last.request.content)
+    assert cuerpo["thinking"] == {"type": "disabled"}
+    assert cuerpo["temperature"] == 0.2
+
+
+@respx.mock
+def test_el_pensamiento_puede_activarse():
+    ruta = respx.post(URL_API).mock(
+        return_value=httpx.Response(200, json=respuesta_openai('{"categoria":"x","razon":"y"}'))
+    )
+
+    DeepSeekProvider(api_key="k", pensamiento=True).complete_json(
+        system="s", user="u", modelo_salida=Salida
+    )
+
+    assert json.loads(ruta.calls.last.request.content)["thinking"] == {"type": "enabled"}

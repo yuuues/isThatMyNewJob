@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # posterior. Ahí el precio es irrelevante y se usa el modelo bueno.
     modelo_gemini: str = "gemini-3.5-flash-lite"
     modelo_perfil: str = "gemini-3.6-flash"
-    modelo_deepseek: str = "deepseek-chat"
+    modelo_deepseek: str = "deepseek-v4-flash"
 
     # El plan gratuito son 200 créditos/mes con límite duro. Se deja margen para
     # las peticiones manuales de diagnóstico, que también descuentan.

@@ -13,10 +13,26 @@ CODIGOS_CUOTA = (402, 429)
 
 
 class DeepSeekProvider:
-    """API compatible con OpenAI. Se usa httpx directamente para no arrastrar el SDK."""
+    """API compatible con OpenAI. Se usa httpx directamente para no arrastrar el SDK.
+
+    El modo de pensamiento viene activado por defecto en DeepSeek y aquí se desactiva.
+    Medido sobre una clasificación real con deepseek-v4-pro: 62 segundos y 1929 tokens
+    de salida, de los cuales 1612 eran razonamiento. A 179 ofertas por run eso son tres
+    horas y el 84% del gasto de salida, para una tarea que ya lleva sus criterios
+    escritos en el prompt.
+
+    Hay una razón de corrección además del coste: la documentación de DeepSeek dice que
+    en modo pensamiento `temperature` se ignora en silencio, sin dar error. El diseño
+    exige temperatura 0.2 para que la clasificación sea consistente, así que con el
+    pensamiento activo esa garantía no existía.
+    """
 
     def __init__(
-        self, api_key: str, modelo: str = "deepseek-chat", timeout: float = 60.0
+        self,
+        api_key: str,
+        modelo: str = "deepseek-v4-flash",
+        timeout: float = 120.0,
+        pensamiento: bool = False,
     ) -> None:
         if not api_key:
             raise ValueError("DeepSeek necesita DEEPSEEK_API_KEY")
@@ -24,6 +40,7 @@ class DeepSeekProvider:
         self.modelo = modelo
         self.nombre = modelo
         self._timeout = timeout
+        self._pensamiento = pensamiento
 
     def complete_json(self, *, system: str, user: str, modelo_salida: type[BaseModel]):
         esquema = json.dumps(modelo_salida.model_json_schema(), ensure_ascii=False)
@@ -38,6 +55,7 @@ class DeepSeekProvider:
             json={
                 "model": self.modelo,
                 "temperature": 0.2,
+                "thinking": {"type": "enabled" if self._pensamiento else "disabled"},
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {"role": "system", "content": instrucciones},
