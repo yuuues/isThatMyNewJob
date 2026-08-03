@@ -67,3 +67,11 @@ El proyecto no usa migraciones: las tablas se crean con `create_all`. La tabla `
 ha ganado una columna (`hash_pdf`, la huella del PDF). **Si tienes una base de datos creada
 antes de este cambio, bórrala** — `data/app.db` — y vuelve a ejecutar `init` y `cv`. Es una
 herramienta local monousuario y no compensa mantener migraciones.
+
+## Licencia
+
+MIT. Ver [LICENSE](LICENSE).
+
+Los ficheros de `tests/fixtures/` son muestras recortadas de respuestas de las APIs de
+Adzuna, JSearch, Remotive y Arbeitnow, y siguen sujetos a las condiciones de uso de cada
+proveedor: la licencia MIT cubre el código, no esos datos.
