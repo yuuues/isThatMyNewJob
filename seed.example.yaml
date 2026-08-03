@@ -1,0 +1,22 @@
+preferencias:
+  salario_min: 45000
+  modalidades: [remoto, hibrido]
+  zonas: [madrid, barcelona]
+  sectores_veto: []
+  tecnologias_veto: [cobol]
+  idiomas: [es, en]
+  notas: |
+    Prefiero producto sobre consultoría.
+    No me interesan puestos con guardias 24/7.
+
+busquedas:
+  - nombre: PHP senior remoto
+    texto: php senior
+    pais: es
+    solo_remoto: true
+    fuentes: [adzuna, remotive, arbeitnow]
+  - nombre: Backend Madrid
+    texto: backend developer
+    pais: es
+    ubicacion: Madrid
+    fuentes: [adzuna]

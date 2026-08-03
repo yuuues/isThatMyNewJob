@@ -1,0 +1,27 @@
+{
+  "count": 2,
+  "results": [
+    {
+      "id": "4912345678",
+      "title": "Desarrollador PHP Senior",
+      "description": "Buscamos un desarrollador PHP senior para el equipo de backend en Madrid con experiencia en Laravel.",
+      "created": "2026-07-30T09:12:00Z",
+      "redirect_url": "https://www.adzuna.es/land/ad/4912345678",
+      "company": { "display_name": "Acme S.L." },
+      "location": { "display_name": "Madrid, Comunidad de Madrid", "area": ["España", "Comunidad de Madrid", "Madrid"] },
+      "salary_min": 45000,
+      "salary_max": 60000,
+      "contract_time": "full_time"
+    },
+    {
+      "id": "4912345679",
+      "title": "Backend Engineer (teletrabajo)",
+      "description": "Puesto en remoto para toda España, trabajando con Symfony y PostgreSQL en el equipo de plataforma.",
+      "created": "2026-07-31T11:00:00Z",
+      "redirect_url": "https://www.adzuna.es/land/ad/4912345679",
+      "company": { "display_name": "Beta Tech" },
+      "location": { "display_name": "España", "area": ["España"] },
+      "contract_time": "full_time"
+    }
+  ]
+}

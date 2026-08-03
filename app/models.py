@@ -1,0 +1,119 @@
+from datetime import UTC, datetime
+
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+def ahora() -> datetime:
+    return datetime.now(UTC)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class Perfil(Base):
+    __tablename__ = "profile"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ruta_pdf: Mapped[str | None] = mapped_column(String, default=None)
+    datos: Mapped[dict] = mapped_column(JSON, default=dict)
+    editado_a_mano: Mapped[bool] = mapped_column(default=False)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+
+
+class PreferenciasRow(Base):
+    __tablename__ = "preferences"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    datos: Mapped[dict] = mapped_column(JSON, default=dict)
+    actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+
+
+class BusquedaGuardada(Base):
+    __tablename__ = "saved_search"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    nombre: Mapped[str] = mapped_column(String)
+    texto: Mapped[str] = mapped_column(String)
+    pais: Mapped[str] = mapped_column(String, default="es")
+    ubicacion: Mapped[str | None] = mapped_column(String, default=None)
+    solo_remoto: Mapped[bool] = mapped_column(default=False)
+    fuentes: Mapped[list] = mapped_column(JSON, default=list)
+    activa: Mapped[bool] = mapped_column(default=True)
+
+
+class Job(Base):
+    __tablename__ = "job"
+    __table_args__ = (
+        UniqueConstraint("hash_dedup", name="uq_job_hash_dedup"),
+        UniqueConstraint("fuente", "external_id", name="uq_job_fuente_external"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fuente: Mapped[str] = mapped_column(String)
+    external_id: Mapped[str] = mapped_column(String)
+    url: Mapped[str] = mapped_column(String)
+    titulo: Mapped[str] = mapped_column(String)
+    empresa: Mapped[str] = mapped_column(String)
+    ubicacion: Mapped[str | None] = mapped_column(String, default=None)
+    modalidad: Mapped[str] = mapped_column(String, default="desconocida")
+    salario_min: Mapped[float | None] = mapped_column(Float, default=None)
+    salario_max: Mapped[float | None] = mapped_column(Float, default=None)
+    salario_texto: Mapped[str | None] = mapped_column(String, default=None)
+    descripcion: Mapped[str] = mapped_column(Text)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    publicada_en: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    ingerida_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+    hash_dedup: Mapped[str] = mapped_column(String, index=True)
+
+    # pendiente | clasificada | descartada_por_regla | error
+    estado_clasificacion: Mapped[str] = mapped_column(String, default="pendiente")
+    motivo_regla: Mapped[str | None] = mapped_column(String, default=None)
+    intentos_clasificacion: Mapped[int] = mapped_column(Integer, default=0)
+
+    clasificacion: Mapped["Clasificacion | None"] = relationship(
+        back_populates="job", uselist=False
+    )
+    decision: Mapped["Decision | None"] = relationship(back_populates="job", uselist=False)
+
+
+class Clasificacion(Base):
+    __tablename__ = "classification"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("job.id"), unique=True)
+    categoria: Mapped[str] = mapped_column(String)
+    confianza: Mapped[str] = mapped_column(String)
+    razonamiento: Mapped[str] = mapped_column(Text)
+    ejes: Mapped[dict] = mapped_column(JSON, default=dict)
+    skills_faltantes: Mapped[list] = mapped_column(JSON, default=list)
+    red_flags: Mapped[list] = mapped_column(JSON, default=list)
+    modelo: Mapped[str] = mapped_column(String)
+    prompt_version: Mapped[int] = mapped_column(Integer)
+    creada_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+
+    job: Mapped[Job] = relationship(back_populates="clasificacion")
+
+
+class Decision(Base):
+    __tablename__ = "decision"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("job.id"), unique=True)
+    # interesa | descartada | aplicada
+    estado: Mapped[str] = mapped_column(String)
+    motivo: Mapped[str] = mapped_column(Text, default="")
+    creada_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+
+    job: Mapped[Job] = relationship(back_populates="decision")
+
+
+class Run(Base):
+    __tablename__ = "run"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    inicio: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+    fin: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    stats: Mapped[dict] = mapped_column(JSON, default=dict)
+    errores: Mapped[list] = mapped_column(JSON, default=list)

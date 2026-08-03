@@ -1,0 +1,49 @@
+{
+  "0-legal-notice": "Legal warning - please link back to Remotive.",
+  "job-count": 3,
+  "total-job-count": 3,
+  "jobs": [
+    {
+      "id": 2091081,
+      "url": "https://remotive.com/remote-jobs/design/senior-graphic-designer-2091081",
+      "title": "Senior Graphic Designer",
+      "company_name": "Lemon.io",
+      "company_logo": "https://remotive.com/job/2091081/logo",
+      "category": "Design",
+      "tags": ["php", "laravel", "graphic design"],
+      "job_type": "full_time",
+      "publication_date": "2026-07-28T14:23:05",
+      "candidate_required_location": "Americas, Europe, Asia, Africa, Oceania",
+      "salary": "",
+      "description": "<p>Are you a talented Senior Designer looking for a remote job?</p>"
+    },
+    {
+      "id": 2091082,
+      "url": "https://remotive.com/remote-jobs/software-dev/senior-php-engineer-2091082",
+      "title": "Senior PHP Engineer",
+      "company_name": "Clipster",
+      "company_logo": "https://remotive.com/job/2091082/logo",
+      "category": "Software Development",
+      "tags": ["php", "symfony"],
+      "job_type": "full_time",
+      "publication_date": "2026-07-29T09:00:00",
+      "candidate_required_location": "Europe, UK, Germany, France",
+      "salary": "60000 - 80000 EUR",
+      "description": "<p>We are looking for a <b>Senior PHP</b> engineer to join the team.</p>"
+    },
+    {
+      "id": 2091083,
+      "url": "https://remotive.com/remote-jobs/sales/inside-sales-2091083",
+      "title": "Inside Sales Contractor",
+      "company_name": "Credit Wellness, LLC",
+      "company_logo": "https://remotive.com/job/2091083/logo",
+      "category": "Sales",
+      "tags": [],
+      "job_type": "contract",
+      "publication_date": "2026-07-30T11:15:00",
+      "candidate_required_location": "Worldwide",
+      "salary": "",
+      "description": "<p>Sell our product to new customers.</p>"
+    }
+  ]
+}
