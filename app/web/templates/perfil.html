@@ -1,0 +1,197 @@
+{# Perfil del candidato: lo que el sistema cree que eres.
+
+   Todo lo que se ve aquí acaba dentro del prompt de clasificación, así que un dato
+   mal extraído no es una errata: es una oferta descartada por un motivo falso. De ahí
+   que la edición manual esté al mismo nivel que la subida del CV y no escondida. #}
+{% extends "base.html" %}
+
+{% block titulo %}Perfil{% endblock %}
+
+{% block contenido %}
+<h1>Perfil</h1>
+
+{% if error %}<p><mark>{{ error }}</mark></p>{% endif %}
+{% if aviso %}<p><mark>{{ aviso }}</mark></p>{% endif %}
+
+{% if perfil %}
+<article>
+  <header>
+    <strong>Perfil vigente</strong>
+    {% if fila.editado_a_mano %}<small><ins>editado a mano</ins></small>{% endif %}
+    {% if fila.ruta_pdf %}<small> · extraído de {{ fila.ruta_pdf }}</small>{% endif %}
+  </header>
+  <table>
+    <tbody>
+      <tr>
+        <th scope="row">Años de experiencia</th>
+        <td>{{ formulario.anios_experiencia or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Título actual</th>
+        <td>{{ perfil.titulo_actual or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Ubicación</th>
+        <td>{{ perfil.ubicacion or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Roles</th>
+        <td>{{ perfil.roles | join(", ") or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Skills</th>
+        <td>
+          {% for skill in perfil.skills %}
+          {{ skill.nombre }}<small>
+            ({{ skill.nivel or "nivel sin indicar" }}{% if skill.anios %}, {{ skill.anios | round | int }} años{% endif %})
+          </small>{% if not loop.last %} · {% endif %}
+          {% else %}sin dato{% endfor %}
+        </td>
+      </tr>
+      <tr>
+        <th scope="row">Sectores</th>
+        <td>{{ perfil.sectores | join(", ") or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Idiomas</th>
+        <td>{{ perfil.idiomas | join(", ") or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Formación</th>
+        <td>{{ perfil.formacion | join(", ") or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Certificaciones</th>
+        <td>{{ perfil.certificaciones | join(", ") or "sin dato" }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Resumen</th>
+        <td>{{ perfil.resumen or "sin dato" }}</td>
+      </tr>
+    </tbody>
+  </table>
+</article>
+{% else %}
+<p>
+  Todavía no hay perfil. Sin él no se puede clasificar nada: sube el PDF de tu
+  currículum o rellena el formulario a mano.
+</p>
+{% endif %}
+
+<article>
+  <header><strong>Subir el currículum en PDF</strong></header>
+  <form action="/profile/pdf" method="post" enctype="multipart/form-data">
+    <label for="pdf">
+      Currículum en PDF
+      <input type="file" id="pdf" name="pdf" accept="application/pdf" required />
+      <small>
+        Si es el mismo PDF que ya subiste no se vuelve a llamar al modelo y tus
+        correcciones se quedan como están. Si es distinto se extrae de nuevo, y las
+        correcciones manuales <strong>no se arrastran</strong>: el perfil anterior queda
+        en el histórico para poder recuperarlas.
+      </small>
+    </label>
+    <button type="submit">Subir y extraer</button>
+  </form>
+</article>
+
+<article>
+  <header><strong>Corregir a mano</strong></header>
+  <form action="/profile" method="post">
+    <fieldset>
+      <label for="titulo_actual">
+        Título actual
+        <input type="text" id="titulo_actual" name="titulo_actual"
+               value="{{ formulario.titulo_actual }}" />
+      </label>
+      <label for="anios_experiencia">
+        Años de experiencia
+        <input type="text" id="anios_experiencia" name="anios_experiencia"
+               value="{{ formulario.anios_experiencia }}" />
+      </label>
+      <label for="ubicacion">
+        Ubicación
+        <input type="text" id="ubicacion" name="ubicacion" value="{{ formulario.ubicacion }}" />
+      </label>
+    </fieldset>
+
+    <label for="roles">
+      Roles <small>(separados por comas)</small>
+      <input type="text" id="roles" name="roles" value="{{ formulario.roles }}" />
+    </label>
+
+    <label for="skills">
+      Skills <small>(una por línea, en «nombre | nivel | años»)</small>
+      <textarea id="skills" name="skills" rows="6">{{ formulario.skills }}</textarea>
+    </label>
+
+    <fieldset>
+      <label for="sectores">
+        Sectores <small>(separados por comas)</small>
+        <input type="text" id="sectores" name="sectores" value="{{ formulario.sectores }}" />
+      </label>
+      <label for="idiomas">
+        Idiomas <small>(separados por comas)</small>
+        <input type="text" id="idiomas" name="idiomas" value="{{ formulario.idiomas }}" />
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <label for="formacion">
+        Formación <small>(separada por comas)</small>
+        <input type="text" id="formacion" name="formacion" value="{{ formulario.formacion }}" />
+      </label>
+      <label for="certificaciones">
+        Certificaciones <small>(separadas por comas)</small>
+        <input type="text" id="certificaciones" name="certificaciones"
+               value="{{ formulario.certificaciones }}" />
+      </label>
+    </fieldset>
+
+    <label for="resumen">
+      Resumen <small>(dos o tres frases; va tal cual dentro del prompt)</small>
+      <textarea id="resumen" name="resumen" rows="3">{{ formulario.resumen }}</textarea>
+    </label>
+
+    <button type="submit">Guardar perfil</button>
+  </form>
+</article>
+
+<details>
+  <summary>Perfiles anteriores ({{ historico | length }})</summary>
+  {% if historico %}
+  <p>
+    <small>
+      Al subir un CV distinto el perfil se extrae de cero y las correcciones manuales no
+      se arrastran. Aquí es donde se recuperan.
+    </small>
+  </p>
+  <table>
+    <thead>
+      <tr>
+        <th scope="col">Actualizado</th>
+        <th scope="col">Origen</th>
+        <th scope="col">Título</th>
+        <th scope="col">Años</th>
+        <th scope="col">Skills</th>
+        <th scope="col">Editado a mano</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for anterior in historico %}
+      <tr>
+        <td>{{ anterior.actualizado_en.strftime("%d/%m/%Y") }}</td>
+        <td>{{ anterior.ruta_pdf or "sin fichero" }}</td>
+        <td>{{ anterior.datos.get("titulo_actual") or "sin dato" }}</td>
+        <td>{{ anterior.datos.get("anios_experiencia") or "sin dato" }}</td>
+        <td>{{ anterior.datos.get("skills", []) | map(attribute="nombre") | join(", ") }}</td>
+        <td>{% if anterior.editado_a_mano %}<ins>sí</ins>{% else %}<del>no</del>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p><small>No hay perfiles anteriores: éste es el primero.</small></p>
+  {% endif %}
+</details>
+{% endblock %}

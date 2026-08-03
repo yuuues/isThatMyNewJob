@@ -1,0 +1,76 @@
+{# Parcial de la lista: es lo que devuelve `GET /` ante una petición de HTMX.
+
+   Conserva `id="lista"` en la raíz porque el reemplazo es `outerHTML`: si el
+   parcial volviera sin el ancla, el siguiente filtro ya no tendría dónde aterrizar.
+
+   Una tabla y no tarjetas: con más de cien ofertas, las columnas alineadas se
+   barren con la vista y las tarjetas obligan a hacer scroll. Cada grupo es un
+   `<details>` nativo, sin JavaScript propio, y `descartar` viene plegado. #}
+<section id="lista">
+  {% if not grupos %}
+  <p class="aviso">No hay ofertas que cumplan estos filtros.</p>
+  {% endif %}
+
+  {% for grupo in grupos %}
+  <details id="grupo-{{ grupo.categoria }}"{% if not grupo.plegado %} open{% endif %}>
+    <summary>
+      <strong>{{ grupo.etiqueta }}</strong>
+      <small>{{ grupo.filas | length }} ofertas</small>
+    </summary>
+
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Oferta</th>
+          <th scope="col">Dónde</th>
+          <th scope="col">Origen</th>
+          <th scope="col">Por qué</th>
+          <th scope="col">Decisión</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for fila in grupo.filas %}
+        <tr>
+          <td>
+            <a href="/job/{{ fila.oferta.id }}">{{ fila.oferta.titulo }}</a>
+            {% if fila.oferta.descripcion_truncada %}
+            <mark title="La fuente sólo publicó un fragmento de la descripción: se juzgó con eso">fragmento</mark>
+            {% endif %}
+            <br />
+            <small>{{ fila.oferta.empresa }}</small>
+            {% for frase in fila.historial %}
+            <br />
+            <small><ins>Ya {{ frase }}</ins></small>
+            {% endfor %}
+          </td>
+
+          <td>
+            <small>{{ fila.oferta.ubicacion or "sin ubicación" }}</small>
+            <br />
+            <small>{{ fila.oferta.modalidad }}</small>
+          </td>
+
+          <td>
+            <small>{{ fila.oferta.fuente }}</small>
+            <br />
+            <small>{{ fila.fecha }}</small>
+            <br />
+            <small><a href="{{ fila.oferta.url }}" target="_blank" rel="noopener noreferrer">original</a></small>
+          </td>
+
+          <td>
+            {% if fila.clasificacion %}
+            <small>confianza {{ fila.clasificacion.confianza }}</small>
+            <br />
+            <small>{{ fila.clasificacion.razonamiento }}</small>
+            {% endif %}
+          </td>
+
+          <td>{% include "_acciones.html" %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+  {% endfor %}
+</section>

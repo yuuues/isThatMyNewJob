@@ -129,7 +129,7 @@ def test_el_prompt_incluye_perfil_preferencias_y_oferta():
 def test_el_prompt_incluye_los_ejemplos_con_su_motivo():
     ejemplos = [
         EjemploDecision(
-            titulo="Dev Java", empresa="Beta", estado="descartada", motivo="No quiero Java"
+            titulo="Dev Java", empresa="Beta", estado="descartada_por_mi", motivo="No quiero Java"
         )
     ]
 
@@ -170,7 +170,10 @@ def test_un_fallo_del_provider_se_propaga():
 
 def test_el_bloque_de_ejemplos_respeta_el_presupuesto(sesion):
     for i in range(6):
-        for estado, motivo in (("interesa", "me gusta "), ("descartada", "no me gusta ")):
+        # Estados del vocabulario vigente (`app.decisiones.ESTADOS`): uno positivo y
+        # uno negativo, para que `ejemplos_few_shot` los tome por ambos lados y el
+        # bloque llegue al prompt con material de sobra que recortar.
+        for estado, motivo in (("guardada", "me gusta "), ("descartada_por_mi", "no me gusta ")):
             job = Job(
                 fuente="test",
                 external_id=f"{estado}{i}",

@@ -3,9 +3,8 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.decisiones import NEGATIVO, POSITIVO, signo_estado
 from app.models import Decision, Job
-
-_POSITIVOS = {"interesa", "aplicada"}
 
 # Presupuesto del few-shot, en caracteres. Se mide en caracteres y no en tokens
 # porque no hace falta la precisión: sobra con acotar el crecimiento. Como regla
@@ -37,7 +36,11 @@ class EjemploDecision:
 
     @property
     def positivo(self) -> bool:
-        return self.estado in _POSITIVOS
+        return signo_estado(self.estado) == POSITIVO
+
+    @property
+    def negativo(self) -> bool:
+        return signo_estado(self.estado) == NEGATIVO
 
 
 def _trunca(texto: str, maximo: int) -> str:
@@ -89,6 +92,11 @@ def ejemplos_few_shot(sesion: Session, maximo: int = 8) -> list[EjemploDecision]
     El equilibrio evita que una racha de descartes convierta al clasificador en un
     descartador sistemático.
 
+    No todo estado es un ejemplo. `rechazado_por_ellos` se queda fuera de los dos
+    lados, ni positivo ni negativo: es una decisión de la empresa, no del
+    candidato, y meterla entre los negativos enseñaría al modelo a esconder
+    ofertas que encajaban. El reparto lo decide `decisiones.signo_estado()`.
+
     El tamaño está acotado por dos vías: cada campo se trunca a su máximo y el
     conjunto se recorta hasta caber en `PRESUPUESTO_CARACTERES`. Sin lo segundo,
     limitar el número de ejemplos no limita nada: ocho motivos largos inflan el
@@ -104,13 +112,16 @@ def ejemplos_few_shot(sesion: Session, maximo: int = 8) -> list[EjemploDecision]
     positivos: list[EjemploDecision] = []
     negativos: list[EjemploDecision] = []
     for decision, job in filas:
+        signo = signo_estado(decision.estado)
+        if signo not in (POSITIVO, NEGATIVO):
+            continue
         ejemplo = EjemploDecision(
             titulo=_trunca(job.titulo, MAX_CARACTERES_TITULO),
             empresa=_trunca(job.empresa, MAX_CARACTERES_EMPRESA),
             estado=decision.estado,
             motivo=_trunca(decision.motivo, MAX_CARACTERES_MOTIVO),
         )
-        (positivos if ejemplo.positivo else negativos).append(ejemplo)
+        (positivos if signo == POSITIVO else negativos).append(ejemplo)
 
     # Se reserva media cuota para los negativos, los positivos llenan el resto y
     # después los negativos se expanden hasta el hueco que hayan dejado. Así el

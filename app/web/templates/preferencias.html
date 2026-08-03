@@ -1,0 +1,136 @@
+{# Preferencias: lo que el candidato QUIERE, que no es lo mismo que lo que es.
+
+   El CV describe la experiencia; esto describe el criterio. Sin la segunda mitad el
+   sistema puntuaría alto ofertas que el usuario rechazaría al leerlas.
+
+   Dos campos de este formulario se comportan de forma poco evidente y la vista tiene
+   que decirlo, porque el coste de no decirlo ya está medido:
+
+   - Las NOTAS se copian literalmente dentro del prompt. Es el campo que más afina la
+     clasificación y hoy suele quedarse vacío por no saber para qué sirve.
+   - Los VETOS descartan ANTES de llamar al modelo. La oferta no aparece en ningún
+     sitio y no hay error que mirar. #}
+{% extends "base.html" %}
+
+{% block titulo %}Preferencias{% endblock %}
+
+{% block contenido %}
+<h1>Preferencias</h1>
+
+{% if error %}<p><mark>{{ error }}</mark></p>{% endif %}
+{% if aviso %}<p><mark>{{ aviso }}</mark></p>{% endif %}
+
+<form action="/preferences" method="post">
+  <label for="salario_min">
+    Salario mínimo anual
+    <input type="text" id="salario_min" name="salario_min"
+           value="{{ formulario.salario_min }}" placeholder="45000" />
+    <small>
+      En euros al año. Déjalo vacío para no filtrar por salario. Sólo descarta cuando la
+      oferta publica un máximo por debajo de esta cifra: si no publica salario, decide el
+      modelo.
+    </small>
+  </label>
+
+  <fieldset>
+    <legend>Modalidades aceptadas</legend>
+    {% for modalidad in modalidades_posibles %}
+    <label for="modalidad-{{ modalidad }}">
+      <input type="checkbox" id="modalidad-{{ modalidad }}" name="modalidades"
+             value="{{ modalidad }}"
+             {% if modalidad in formulario.modalidades %}checked{% endif %} />
+      {{ modalidad }}
+    </label>
+    {% endfor %}
+    <small>
+      Si no marcas ninguna se descartan todas las ofertas cuya modalidad se conozca. Las
+      ofertas que no la declaran pasan igual: ante la duda no se descarta.
+    </small>
+  </fieldset>
+
+  <fieldset>
+    <legend>Idiomas que aceptas en la oferta</legend>
+    {% for idioma in idiomas_posibles %}
+    <label for="idioma-{{ idioma }}">
+      <input type="checkbox" id="idioma-{{ idioma }}" name="idiomas" value="{{ idioma }}"
+             {% if idioma in formulario.idiomas %}checked{% endif %} />
+      {{ idioma }}
+    </label>
+    {% endfor %}
+    <small>
+      Se descarta una oferta sólo cuando su idioma se detecta con seguridad y no está
+      marcado aquí. Un texto corto no da señal suficiente y no se descarta.
+    </small>
+  </fieldset>
+
+  <label for="zonas">
+    Zonas <small>(separadas por comas)</small>
+    <input type="text" id="zonas" name="zonas" value="{{ formulario.zonas }}"
+           placeholder="Valencia, Madrid, remoto" />
+    <small>
+      Sólo se aplican a ofertas presenciales o híbridas. Una oferta de ámbito nacional
+      («España») no se descarta por no nombrar tu ciudad.
+    </small>
+  </label>
+
+  <article>
+    <header><strong>Vetos</strong> <small>— descartan sin que llegues a verlo</small></header>
+    <p>
+      <mark>
+        Un veto descarta la oferta por regla, sin llegar al modelo y sin aparecer en el
+        listado. No hay error que revisar: la oferta simplemente no está. Medido sobre
+        datos reales, vetar <code>java</code> ocultaba 3 ofertas válidas de 197, porque la
+        palabra aparecía de pasada en la descripción.
+      </mark>
+    </p>
+    <p>
+      <small>
+        Escribe términos concretos y ponlos en plural o en singular tal cual aparecen. Lo
+        que descartes aquí se puede revisar en <a href="/runs">Ejecuciones</a>, en la lista
+        de descartes por regla, y recuperar desde el botón de reevaluar de esta página.
+      </small>
+    </p>
+
+    <label for="tecnologias_veto">
+      Tecnologías vetadas <small>(separadas por comas)</small>
+      <input type="text" id="tecnologias_veto" name="tecnologias_veto"
+             value="{{ formulario.tecnologias_veto }}" placeholder="php, cobol" />
+    </label>
+
+    <label for="sectores_veto">
+      Sectores vetados <small>(separados por comas)</small>
+      <input type="text" id="sectores_veto" name="sectores_veto"
+             value="{{ formulario.sectores_veto }}" placeholder="apuestas, tabaco" />
+    </label>
+  </article>
+
+  <label for="notas">
+    Notas libres <small>— el campo que más afina la clasificación</small>
+    <textarea id="notas" name="notas" rows="5"
+              placeholder="Nada de guardias nocturnas. Prefiero equipos pequeños.">{{ formulario.notas }}</textarea>
+    <small>
+      Este texto se inyecta <strong>tal cual</strong> dentro del prompt que evalúa cada
+      oferta, junto a tu perfil. Es la válvula de escape para todo criterio que no cabe en
+      un formulario: qué tipo de equipo quieres, qué te echa para atrás, qué estás
+      dispuesto a negociar. Vacío, el modelo sólo tiene los campos de arriba y clasifica
+      bastante peor. Escríbelo en frases normales; no hace falta ningún formato.
+    </small>
+  </label>
+
+  <button type="submit">Guardar preferencias</button>
+</form>
+
+<article>
+  <header><strong>Reevaluar el prefiltro</strong></header>
+  <p>
+    Hay <strong>{{ descartadas_por_regla }}</strong> ofertas fuera de la cola por una regla.
+    Al quitar un veto no vuelven solas: siguen marcadas con el motivo del día en que se
+    descartaron. Esto vuelve a pasarles las reglas de arriba y devuelve a la cola las que
+    ya no incumplen ninguna. No toca las ofertas ya clasificadas ni las que agotaron sus
+    intentos.
+  </p>
+  <form action="/preferences/reevaluar" method="post">
+    <button type="submit">Reevaluar las descartadas por regla</button>
+  </form>
+</article>
+{% endblock %}

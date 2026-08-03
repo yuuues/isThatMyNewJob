@@ -104,10 +104,18 @@ class Decision(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     job_id: Mapped[int] = mapped_column(ForeignKey("job.id"), unique=True)
-    # interesa | descartada | aplicada
+    # guardada | aplicada | en_proceso | rechazado_por_ellos | descartada_por_mi
+    # El vocabulario y su significado viven en app/decisiones.py. No se declara
+    # como Enum de base de datos: SQLite no lo comprueba y obligaría a migrar la
+    # tabla cada vez que aparezca un estado nuevo.
     estado: Mapped[str] = mapped_column(String)
     motivo: Mapped[str] = mapped_column(Text, default="")
     creada_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
+    # Cuándo se presentó el candidato. Se fija la primera vez que la decisión
+    # llega a `aplicada` y no se mueve después, para poder contar candidaturas
+    # por mes aunque la empresa conteste más tarde.
+    aplicada_en: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    actualizada_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)
 
     job: Mapped[Job] = relationship(back_populates="decision")
 

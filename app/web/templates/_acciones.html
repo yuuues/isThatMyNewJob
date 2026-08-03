@@ -1,0 +1,67 @@
+{# Bloque de decisión de UNA oferta.
+
+   Es el mismo en el listado y en el detalle, y es también lo que devuelve
+   `POST /job/{id}/decision`. Por eso el `id` va en la raíz y no en el `<td>` que
+   lo envuelve en la lista: HTMX sustituye este bloque entero y nada más, así que
+   decidir sobre una fila no recarga las otras ciento noventa.
+
+   Se usa `<details>` como raíz por tres motivos: es válido dentro de un `<td>` y
+   suelto en el detalle, Pico lo estiliza sin una línea de CSS propia, y plegado
+   deja la fila en una sola línea, que es de lo que va toda esta vista.
+
+   Espera en el contexto `fila` (la construye `routes_ofertas._construye_fila`) y
+   `estados`. #}
+<details id="decision-{{ fila.oferta.id }}">
+  <summary>
+    {% if fila.decision %}<strong>{{ fila.etiqueta_estado }}</strong>{% else %}Decidir{% endif %}
+  </summary>
+
+  {% if fila.decision and fila.decision.motivo %}
+  <small>Motivo anotado: {{ fila.decision.motivo }}</small>
+  {% endif %}
+
+  {# `method`/`action` además de los atributos de HTMX: sin JavaScript el formulario
+     sigue funcionando, sólo que recargando la página. #}
+  <form
+    method="post"
+    action="/job/{{ fila.oferta.id }}/decision"
+    hx-post="/job/{{ fila.oferta.id }}/decision"
+    hx-target="#decision-{{ fila.oferta.id }}"
+    hx-swap="outerHTML"
+  >
+    <label>
+      Qué has hecho con esta oferta
+      <select name="estado">
+        {% for estado, etiqueta in estados %}
+        <option value="{{ estado }}"{% if fila.decision and fila.decision.estado == estado %} selected{% endif %}>{{ etiqueta }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Por qué
+      <input
+        type="text"
+        name="motivo"
+        value="{{ fila.decision.motivo if fila.decision else '' }}"
+        placeholder="Por ejemplo: exigen presencial en Madrid"
+      />
+    </label>
+
+    <small>
+      Se guarda igual sin escribir nada, pero una decisión sin motivo
+      <strong>no enseña nada al clasificador</strong>: sólo se usan como ejemplo
+      las que llevan motivo escrito.
+    </small>
+
+    <small>
+      Ojo con «La empresa me ha descartado»:
+      <strong>no enseña al clasificador a evitar ofertas parecidas</strong>. Que te
+      rechacen no dice qué quieres tú, dice que encajabas lo bastante como para
+      presentarte, así que esa decisión se ignora como ejemplo en vez de contarse
+      como negativa.
+    </small>
+
+    <button type="submit">Guardar decisión</button>
+  </form>
+</details>

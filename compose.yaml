@@ -3,7 +3,19 @@ services:
     build: .
     env_file: .env
     volumes:
+      # data/ es el unico volumen imprescindible: ahi vive data/app.db, que debe
+      # sobrevivir a un rebuild. El bind del arbol entero es comodidad de desarrollo.
       - ./data:/app/data
       - .:/app
     ports:
-      - "8000:8000"
+      # El 8000 es de los puertos mas disputados en una maquina de desarrollo: en la
+      # maquina donde se probo esto ya lo tenia otro proyecto y `up` fallaba con
+      # "port is already allocated". Por defecto se publica en el 8100 y se puede
+      # cambiar con PUERTO_WEB en el .env sin tocar este fichero.
+      - "${PUERTO_WEB:-8100}:8000"
+    # Herramienta local con un run diario: si el equipo se reinicia a las 3 de la
+    # manana, el run de las 7 tiene que salir igual.
+    restart: unless-stopped
+    # Aqui NO se declara `environment:` ni `command:`. El interruptor del scheduler
+    # viaja en el CMD del Dockerfile justamente para que `docker compose run --rm app
+    # pytest` no lo herede; ponerlo en el servicio lo heredaria todo, tests incluidos.

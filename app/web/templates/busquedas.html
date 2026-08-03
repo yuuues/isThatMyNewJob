@@ -1,0 +1,159 @@
+{# Búsquedas guardadas: qué se le pide a cada fuente en cada run.
+
+   Dos avisos viven aquí porque es donde se toman las decisiones que cuestan:
+
+   - Marcar JSearch compromete créditos de un cupo mensual con límite duro. Se ve el
+     coste antes de marcar la casilla, no cuando el cupo se agota a mitad de mes.
+   - «Buscar ahora» lanza un run de verdad contra APIs de terceros. Va limitado.
+
+   Cada búsqueda se edita en su propio <details>: con cinco o seis búsquedas, tener seis
+   formularios desplegados a la vez enterraría la tabla. #}
+{% extends "base.html" %}
+
+{% block titulo %}Búsquedas{% endblock %}
+
+{% macro campos(datos, fuentes_posibles, sufijo) %}
+<fieldset>
+  <label for="nombre-{{ sufijo }}">
+    Nombre
+    <input type="text" id="nombre-{{ sufijo }}" name="nombre" value="{{ datos.nombre }}" required />
+  </label>
+  <label for="texto-{{ sufijo }}">
+    Qué buscar
+    <input type="text" id="texto-{{ sufijo }}" name="texto" value="{{ datos.texto }}" required />
+  </label>
+</fieldset>
+<fieldset>
+  <label for="pais-{{ sufijo }}">
+    País <small>(código de dos letras; lo usa Adzuna)</small>
+    <input type="text" id="pais-{{ sufijo }}" name="pais" value="{{ datos.pais }}" />
+  </label>
+  <label for="ubicacion-{{ sufijo }}">
+    Ubicación <small>(opcional)</small>
+    <input type="text" id="ubicacion-{{ sufijo }}" name="ubicacion" value="{{ datos.ubicacion }}" />
+  </label>
+</fieldset>
+<fieldset>
+  <legend>Fuentes</legend>
+  {% for fuente in fuentes_posibles %}
+  <label for="fuente-{{ sufijo }}-{{ fuente }}">
+    <input type="checkbox" id="fuente-{{ sufijo }}-{{ fuente }}" name="fuentes" value="{{ fuente }}"
+           {% if fuente in datos.fuentes %}checked{% endif %} />
+    {{ fuente }}{% if fuente == "jsearch" %} <small>— gasta créditos del cupo mensual</small>{% endif %}
+  </label>
+  {% endfor %}
+</fieldset>
+<fieldset>
+  <label for="solo_remoto-{{ sufijo }}">
+    <input type="checkbox" id="solo_remoto-{{ sufijo }}" name="solo_remoto"
+           {% if datos.solo_remoto %}checked{% endif %} />
+    Sólo remoto
+  </label>
+  <label for="activa-{{ sufijo }}">
+    <input type="checkbox" id="activa-{{ sufijo }}" name="activa"
+           {% if datos.activa %}checked{% endif %} />
+    Activa <small>— si la desmarcas, el run deja de ejecutarla</small>
+  </label>
+</fieldset>
+{% endmacro %}
+
+{% block contenido %}
+<h1>Búsquedas guardadas</h1>
+
+{% if error %}<p><mark>{{ error }}</mark></p>{% endif %}
+{% if aviso %}<p><mark>{{ aviso }}</mark></p>{% endif %}
+
+<article>
+  <header><strong>Coste comprometido en JSearch</strong></header>
+  <p>
+    Las búsquedas activas que usan JSearch gastan
+    <strong>{{ coste.por_run }}</strong> créditos por ejecución. Con una ejecución diaria
+    son <strong>{{ coste.al_mes }}</strong> al mes sobre un cupo de
+    <strong>{{ coste.limite }}</strong>, contando {{ coste.runs_al_mes }} runs al mes.
+    {% if coste.excede %}
+    <mark>
+      Eso pasa del cupo: JSearch dejará de responder antes de fin de mes y sus ofertas
+      desaparecerán sin aviso. Desactiva alguna búsqueda o quítale JSearch.
+    </mark>
+    {% endif %}
+  </p>
+  <p>
+    <small>
+      Las demás fuentes (Adzuna, Remotive, Arbeitnow) no gastan créditos. El consumo real
+      del mes se ve en <a href="/runs">Ejecuciones</a>.
+    </small>
+  </p>
+</article>
+
+<article>
+  <header><strong>Buscar ahora</strong></header>
+  <p>
+    <small>
+      Lanza una ejecución completa en segundo plano: ingesta, prefiltro y clasificación de
+      lo nuevo. Tarda varios minutos y el resultado aparece en
+      <a href="/runs">Ejecuciones</a>. Está limitado a una cada seis horas a propósito: el
+      aviso legal de Remotive pide un máximo aproximado de cuatro peticiones diarias, y el
+      run diario ya trae lo que haya salido.
+    </small>
+  </p>
+  <form action="/searches/buscar" method="post">
+    <button type="submit">Buscar ahora</button>
+  </form>
+</article>
+
+{% if busquedas %}
+<table>
+  <thead>
+    <tr>
+      <th scope="col">Nombre</th>
+      <th scope="col">Qué busca</th>
+      <th scope="col">País</th>
+      <th scope="col">Ubicación</th>
+      <th scope="col">Fuentes</th>
+      <th scope="col">Estado</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for busqueda in busquedas %}
+    <tr>
+      <td>{{ busqueda.nombre }}</td>
+      <td>{{ busqueda.texto }}</td>
+      <td>{{ busqueda.pais }}</td>
+      <td>{{ busqueda.ubicacion or "—" }}{% if busqueda.solo_remoto %} <small>(sólo remoto)</small>{% endif %}</td>
+      <td>
+        {{ busqueda.fuentes | join(", ") or "ninguna" }}
+        {% if "jsearch" in (busqueda.fuentes or []) %}<small>· con créditos</small>{% endif %}
+      </td>
+      <td>
+        {% if busqueda.activa %}<ins>activa</ins>{% else %}<del>inactiva</del>{% endif %}
+      </td>
+    </tr>
+    <tr>
+      <td colspan="6">
+        <details>
+          <summary>Editar «{{ busqueda.nombre }}»</summary>
+          <form action="/searches/{{ busqueda.id }}" method="post">
+            {{ campos(formularios[busqueda.id], fuentes_posibles, busqueda.id) }}
+            <button type="submit">Guardar cambios</button>
+          </form>
+          <form action="/searches/{{ busqueda.id }}/borrar" method="post">
+            <button type="submit">Borrar esta búsqueda</button>
+          </form>
+        </details>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p>No hay búsquedas guardadas. Sin al menos una activa, el run no trae nada.</p>
+{% endif %}
+
+<article>
+  <header><strong>Nueva búsqueda</strong></header>
+  <form action="/searches" method="post">
+    {{ campos(formulario, fuentes_posibles, "nueva") }}
+    <button type="submit">Crear búsqueda</button>
+  </form>
+</article>
+{% endblock %}

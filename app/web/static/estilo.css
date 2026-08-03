@@ -1,0 +1,126 @@
+/* Ajustes propios ENCIMA de Pico. Se carga después de pico.min.css a propósito.
+ *
+ * Aquí no se rehace el diseño: Pico ya estiliza el HTML semántico sin clases. Lo
+ * único que hace falta corregir es LA DENSIDAD. Pico está pensado para páginas de
+ * lectura, con mucho aire, y esta herramienta muestra listas de más de cien
+ * ofertas: con el espaciado de serie el usuario se pasaría la vida haciendo
+ * scroll. El objetivo es que quepan del orden de quince filas en la pantalla de
+ * un portátil sin que la lista resulte apretada.
+ *
+ * Todo se hace redefiniendo las variables de Pico, no peleando con selectores ni
+ * con !important: así los ajustes puntuales que necesite una vista concreta
+ * siguen siendo posibles, y una actualización de Pico no rompe nada.
+ */
+
+:root {
+  /* Pico escala el tamaño base con el ancho de pantalla (hasta 131.25% en
+     monitores grandes), lo que en una lista larga es justo lo contrario de lo que
+     interesa. Se fija en 93.75% (15px) para todos los tamaños: al declararse
+     después que Pico, esta línea gana también sobre sus media queries. */
+  --pico-font-size: 93.75%;
+
+  /* 1.5 → 1.35. Sigue siendo cómodo de leer y ahorra un par de píxeles por línea,
+     que multiplicados por cien filas son varias pantallas. */
+  --pico-line-height: 1.35;
+
+  /* La unidad de espaciado de la que cuelga casi todo lo demás. De ella salen
+     directamente el padding de las celdas de tabla, que Pico calcula como
+     `calc(var(--pico-spacing) / 2) var(--pico-spacing)`: 0.5rem/1rem pasan a
+     0.275rem/0.55rem. */
+  --pico-spacing: 0.55rem;
+
+  /* Margen inferior de párrafos, listas y titulares. */
+  --pico-typography-spacing-vertical: 0.5rem;
+
+  /* Aire vertical de los bloques sueltos (article, header, main, footer). */
+  --pico-block-spacing-vertical: 0.6rem;
+
+  /* Los formularios de perfil, preferencias y búsquedas tienen muchos campos y
+     con el tamaño de serie no cabe ninguno entero en pantalla. */
+  --pico-form-element-spacing-vertical: 0.4rem;
+  --pico-form-element-spacing-horizontal: 0.6rem;
+
+  /* La navegación es una sola línea permanente: no necesita 1rem arriba y abajo. */
+  --pico-nav-element-spacing-vertical: 0.35rem;
+}
+
+/* Los titulares de Pico (h1 a 2rem) están pensados para artículos. Aquí encabezan
+   secciones de una lista, así que se bajan de escala redefiniendo las variables
+   que el propio Pico usa dentro de cada etiqueta. */
+h1 {
+  --pico-font-size: 1.55rem;
+}
+
+h2 {
+  --pico-font-size: 1.3rem;
+}
+
+h3 {
+  --pico-font-size: 1.1rem;
+}
+
+h4,
+h5,
+h6 {
+  --pico-font-size: 1rem;
+}
+
+/* Las tablas del listado se leen mejor con las cabeceras fijas al hacer scroll,
+   que es la otra mitad de "que quepan quince filas": si la cabecera se va, las
+   columnas dejan de significar nada. */
+thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: var(--pico-background-color);
+}
+
+/* Texto secundario (fuente, fecha, razonamiento). `small` es semántico y Pico ya
+   lo reduce; aquí sólo se apaga el color para que no compita con el título. */
+small {
+  color: var(--pico-muted-color);
+}
+
+/* Marcas cortas: categoría, modalidad, "descripción truncada". `mark` es HTML
+   semántico y lo estiliza Pico; se compacta para que no engorde la fila. */
+mark {
+  padding: 0 0.25rem;
+  font-size: 0.8em;
+}
+
+/* Cuatro clases de apoyo, y sólo cuatro, para lo que el HTML semántico no nombra.
+   Están definidas sobre variables de Pico para que sigan el tema claro/oscuro sin
+   mantener una paleta propia en paralelo. Si algo se puede decir con una etiqueta
+   (`small`, `mark`, `article`), se usa la etiqueta y no una clase. */
+.tarjeta {
+  background-color: var(--pico-card-background-color);
+  border: var(--pico-border-width) solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  padding: var(--pico-spacing);
+  margin-bottom: var(--pico-spacing);
+}
+
+.tenue {
+  color: var(--pico-muted-color);
+  font-size: 0.9em;
+}
+
+.aviso {
+  color: var(--pico-del-color);
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 0 0.3rem;
+  border: var(--pico-border-width) solid currentcolor;
+  border-radius: var(--pico-border-radius);
+  color: var(--pico-muted-color);
+  font-size: 0.8em;
+}
+
+/* HTMX marca en vuelo el elemento que disparó la petición. Sirve de aviso de que
+   algo está pasando y evita el doble clic sin darse cuenta. */
+.htmx-request,
+.htmx-request button {
+  opacity: 0.6;
+}

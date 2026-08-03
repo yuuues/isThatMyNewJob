@@ -1,0 +1,225 @@
+{# Vista de diagnóstico: ejecuciones, descartes por regla y cupo de JSearch.
+
+   Esta pantalla existe para que un fallo silencioso se vea. Mirando los descartes
+   por regla aparecieron tres defectos reales del sistema, así que la lista está
+   pensada para leerse entera: grupos plegables ordenados por tamaño, el más
+   numeroso abierto, y un botón por oferta para devolverla a la cola.
+
+   Reglas de estilo que hereda de base.html:
+
+   - Pico es CLASSLESS: se escribe HTML semántico (<table>, <details>, <summary>,
+     <form>) y él lo estiliza. No se inventan clases ni se mete <style> aquí.
+   - Lo plegable es <details> nativo, no JavaScript propio: funciona sin scripts.
+   - Los estados se distinguen con texto y con <mark>, <small>, <strong>, <ins>;
+     no con colores puestos a mano.
+
+   Las acciones son <form method="post"> de verdad, con los atributos de HTMX
+   encima. Si el navegador no ejecuta scripts la página sigue funcionando con una
+   recarga; con HTMX se sustituye sólo <main id="contenido">, que es lo que
+   `hx-select` recorta de la respuesta completa que devuelve la ruta. #}
+{% extends "base.html" %}
+
+{# Los tres atributos `hx-target` / `hx-select` / `hx-swap` se repiten en las dos
+   acciones a propósito, escritos a mano. Sacarlos a una variable obligaría a
+   marcarla `| safe` para que Jinja no escapara las comillas, y una variable con
+   HTML sin escapar en una plantilla es una costumbre que acaba mal. #}
+
+{% block resumen %}
+  {# El cupo va en la cabecera y no en el cuerpo: es el recurso escaso del sistema
+     —200 créditos al mes con límite duro, uno por búsqueda con JSearch y run— y
+     tiene que verse antes de agotarse, no cuando ya no traiga ofertas. #}
+  <p>
+    Cupo de JSearch en {{ cupo.periodo }}:
+    <strong>{{ cupo.consumido }}</strong> de {{ cupo.limite }} créditos consumidos,
+    quedan <strong>{{ cupo.restante }}</strong>.
+    {% if cupo.agotado %}
+      <mark>Agotado</mark>
+      <small>JSearch no traerá nada más hasta el mes que viene.</small>
+    {% endif %}
+  </p>
+{% endblock %}
+
+{% block contenido %}
+  {% if aviso %}
+    <p><ins>{{ aviso }}</ins></p>
+  {% endif %}
+
+  <h1>Ejecuciones</h1>
+
+  <section>
+    <h2>Histórico</h2>
+    {% for run in runs %}
+      <details {% if loop.first %}open{% endif %}>
+        <summary>
+          {{ run.inicio.strftime("%d/%m/%Y %H:%M") }} →
+          {% if run.fin %}{{ run.fin.strftime("%d/%m/%Y %H:%M") }}{% else %}<mark>En curso</mark>{% endif %}
+          · <strong>{{ run.totales.clasificadas }}</strong> clasificadas
+          · {{ run.totales.descartadas_por_regla }} descartadas por regla
+          · {{ run.totales.agotadas }} agotadas
+          {% if run.errores %}· <mark>{{ run.errores | length }} errores</mark>{% endif %}
+        </summary>
+
+        {% if run.totales.interrumpido_por %}
+          <p><mark>Run interrumpido: {{ run.totales.interrumpido_por }}</mark></p>
+        {% endif %}
+
+        {% if run.fuentes %}
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Fuente</th>
+                <th scope="col">Recibidas</th>
+                <th scope="col">Nuevas</th>
+                <th scope="col">Duplicadas</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for fuente in run.fuentes %}
+                <tr>
+                  <th scope="row">{{ fuente.fuente }}</th>
+                  <td>{{ fuente.recibidas | default(0) }}</td>
+                  <td>{{ fuente.nuevas | default(0) }}</td>
+                  <td>{{ fuente.duplicadas | default(0) }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p><small>Este run no llegó a consultar ninguna fuente.</small></p>
+        {% endif %}
+
+        {% if run.errores %}
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Tipo</th>
+                <th scope="col">Referencia</th>
+                <th scope="col">Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for error in run.errores %}
+                <tr>
+                  <td>{{ error.tipo }}</td>
+                  <td>
+                    {% if error.job_id %}
+                      <a href="/job/{{ error.job_id }}">{{ error.referencia }}</a>
+                    {% else %}
+                      {{ error.referencia }}
+                    {% endif %}
+                  </td>
+                  <td><small>{{ error.mensaje }}</small></td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p><small>Sin errores.</small></p>
+        {% endif %}
+      </details>
+    {% else %}
+      <p><small>Todavía no se ha ejecutado ningún run.</small></p>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>Descartadas por regla</h2>
+    <p>
+      <small>
+        Estas ofertas ni siquiera llegaron al modelo: las paró el prefiltro. Un veto
+        mal puesto no da error, sólo deja de traer ofertas, así que conviene leer los
+        motivos más numerosos. Devolver una a la cola la clasificará en el próximo run.
+      </small>
+    </p>
+    {% for grupo in descartes %}
+      <details {% if loop.first %}open{% endif %}>
+        <summary>
+          {{ grupo.motivo }} · <strong>{{ grupo.recuento }}</strong>
+          oferta{{ "s" if grupo.recuento != 1 }}
+        </summary>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Oferta</th>
+              <th scope="col">Empresa</th>
+              <th scope="col">Ubicación</th>
+              <th scope="col">Fuente</th>
+              <th scope="col">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for oferta in grupo.ofertas %}
+              <tr>
+                <td><a href="/job/{{ oferta.id }}">{{ oferta.titulo }}</a></td>
+                <td>{{ oferta.empresa }}</td>
+                <td><small>{{ oferta.ubicacion or "—" }}</small></td>
+                <td><small>{{ oferta.fuente }}</small></td>
+                <td>
+                  <form
+                    method="post"
+                    action="/runs/descartes/{{ oferta.id }}/reencolar"
+                    hx-post="/runs/descartes/{{ oferta.id }}/reencolar"
+                    hx-target="#contenido"
+                    hx-select="#contenido"
+                    hx-swap="outerHTML"
+                  >
+                    <button type="submit">Devolver a la cola</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </details>
+    {% else %}
+      <p><small>Ninguna oferta descartada por regla.</small></p>
+    {% endfor %}
+  </section>
+
+  <section>
+    <h2>Ofertas que agotaron los intentos</h2>
+    <p>
+      <small>
+        Fallaron al clasificarse tantas veces que el pipeline dejó de intentarlo.
+        Reintentar pone los intentos a cero y las devuelve a la cola.
+      </small>
+    </p>
+    {% if fallidas %}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Oferta</th>
+            <th scope="col">Empresa</th>
+            <th scope="col">Fuente</th>
+            <th scope="col">Intentos</th>
+            <th scope="col">Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for oferta in fallidas %}
+            <tr>
+              <td><a href="/job/{{ oferta.id }}">{{ oferta.titulo }}</a></td>
+              <td>{{ oferta.empresa }}</td>
+              <td><small>{{ oferta.fuente }}</small></td>
+              <td>{{ oferta.intentos_clasificacion }}</td>
+              <td>
+                <form
+                  method="post"
+                  action="/runs/errores/{{ oferta.id }}/reintentar"
+                  hx-post="/runs/errores/{{ oferta.id }}/reintentar"
+                  hx-target="#contenido"
+                  hx-select="#contenido"
+                  hx-swap="outerHTML"
+                >
+                  <button type="submit">Reintentar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p><small>Ninguna oferta atascada.</small></p>
+    {% endif %}
+  </section>
+{% endblock %}

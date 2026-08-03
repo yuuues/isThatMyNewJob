@@ -1,0 +1,57 @@
+{# Plantilla madre de las cinco vistas.
+
+   Dos reglas que no hay que romper:
+
+   1. Nada se carga de fuera. Es una herramienta local que tiene que funcionar sin
+      red, así que Pico, los estilos propios y HTMX se sirven desde /static. Ni CDN
+      ni fuentes externas.
+   2. El HTML es SEMÁNTICO. Pico es un framework sin clases: estiliza <header>,
+      <nav>, <main>, <table>, <article> y los formularios por sí solo. Un árbol de
+      <div class="loquesea"> no recibiría ningún estilo, así que las vistas que
+      hereden de aquí deben usar etiquetas, no clases inventadas.
+
+   El orden de las hojas importa: pico.min.css primero y estilo.css después, que es
+   el que aprieta la densidad redefiniendo las variables de Pico. #}
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block titulo %}{{ titulo | default("Ofertas") }}{% endblock %} · isThatMyNewJob</title>
+    <link rel="stylesheet" href="/static/pico.min.css" />
+    <link rel="stylesheet" href="/static/estilo.css" />
+    <script src="/static/htmx.min.js" defer></script>
+  </head>
+  <body>
+    {# Pico maqueta la navegación a partir de <nav> con listas: la primera <ul> queda
+       a la izquierda y la segunda a la derecha. #}
+    <header class="container">
+      <nav aria-label="Navegación principal">
+        <ul>
+          <li><strong>¿Es este mi próximo trabajo?</strong></li>
+        </ul>
+        <ul>
+          <li><a href="/">Ofertas</a></li>
+          <li><a href="/profile">Perfil</a></li>
+          <li><a href="/preferences">Preferencias</a></li>
+          <li><a href="/searches">Búsquedas</a></li>
+          <li><a href="/runs">Ejecuciones</a></li>
+        </ul>
+      </nav>
+      {# Hueco para lo que cada vista quiera tener siempre visible: los contadores de
+         candidaturas del listado, el cupo de JSearch en las ejecuciones… #}
+      {% block resumen %}{% endblock %}
+    </header>
+
+    {# `id="contenido"` es el destino por defecto de los reemplazos de HTMX. #}
+    <main class="container" id="contenido">
+      {% block contenido %}
+      <p class="aviso">Todavía no hay nada que mostrar en esta sección.</p>
+      {% endblock %}
+    </main>
+
+    <footer class="container">
+      <small class="tenue">Herramienta local. Los datos no salen de esta máquina.</small>
+    </footer>
+  </body>
+</html>

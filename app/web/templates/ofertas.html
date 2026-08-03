@@ -1,0 +1,66 @@
+{# Vista principal: filtros arriba y la lista debajo.
+
+   El formulario es un `<form method="get">` de toda la vida con los atributos de
+   HTMX encima: sin JavaScript filtra recargando la página, y con él sustituye
+   solamente `#lista`. #}
+{% extends "base.html" %}
+
+{% block titulo %}Ofertas{% endblock %}
+
+{% block resumen %}
+{# Los contadores viven fuera de `#lista` a propósito: no dependen del filtro, así
+   que no deben cambiar al filtrar. #}
+<p>
+  <small>
+    Candidaturas: <strong>{{ resumen.aplicadas }}</strong> aplicadas este mes
+    ({{ resumen.periodo }}) · <strong>{{ resumen.en_proceso }}</strong> en proceso
+  </small>
+</p>
+{% endblock %}
+
+{% block contenido %}
+<form
+  method="get"
+  action="/"
+  hx-get="/"
+  hx-target="#lista"
+  hx-swap="outerHTML"
+  hx-trigger="change, submit, keyup changed delay:400ms from:input[name='q']"
+>
+  <fieldset role="group">
+    <input
+      type="search"
+      name="q"
+      value="{{ filtros.q }}"
+      placeholder="Buscar en título y empresa"
+      aria-label="Buscar en título y empresa"
+    />
+
+    <select name="fuente" aria-label="Fuente">
+      <option value="">Todas las fuentes</option>
+      {% for fuente in fuentes %}
+      <option value="{{ fuente }}"{% if filtros.fuente == fuente %} selected{% endif %}>{{ fuente }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="categoria" aria-label="Categoría">
+      <option value="">Todas las categorías</option>
+      {% for categoria, etiqueta in categorias %}
+      <option value="{{ categoria }}"{% if filtros.categoria == categoria %} selected{% endif %}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+
+    <select name="estado" aria-label="Estado de la decisión">
+      <option value=""{% if not filtros.estado %} selected{% endif %}>Aún sin decidir</option>
+      <option value="todas"{% if filtros.estado == "todas" %} selected{% endif %}>Decididas y sin decidir</option>
+      {% for estado, etiqueta in estados %}
+      <option value="{{ estado }}"{% if filtros.estado == estado %} selected{% endif %}>Sólo: {{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+
+    <button type="submit">Filtrar</button>
+  </fieldset>
+</form>
+
+{% include "_lista.html" %}
+{% endblock %}

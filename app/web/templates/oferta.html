@@ -1,0 +1,124 @@
+{# Detalle de una oferta: de qué se decidió y con qué se decidió.
+
+   Aquí no manda la densidad sino la trazabilidad: descripción completa,
+   razonamiento, los cinco ejes, lo que falta, las red flags, y con qué modelo y
+   versión de prompt se juzgó. Sin eso, reclasificar sería un botón a ciegas. #}
+{% extends "base.html" %}
+
+{% block titulo %}{{ fila.oferta.titulo }}{% endblock %}
+
+{% block contenido %}
+{% if error %}
+<p class="aviso">
+  No se pudo reclasificar y la clasificación anterior sigue intacta. El proveedor
+  respondió: {{ error }}
+</p>
+{% endif %}
+
+<article>
+  <header>
+    <h1>{{ fila.oferta.titulo }}</h1>
+    <p>
+      <strong>{{ fila.oferta.empresa }}</strong>
+      · {{ fila.oferta.ubicacion or "sin ubicación" }}
+      · {{ fila.oferta.modalidad }}
+      · {{ fila.oferta.fuente }}
+      · publicada {{ fila.fecha }}
+    </p>
+    <p>
+      <a href="{{ fila.oferta.url }}" target="_blank" rel="noopener noreferrer">
+        Abrir la oferta original
+      </a>
+    </p>
+    {% for frase in fila.historial %}
+    <p><small><ins>Ya {{ frase }}</ins></small></p>
+    {% endfor %}
+  </header>
+
+  {% if fila.clasificacion %}
+  <h2>Veredicto</h2>
+  <p>
+    <mark>{{ fila.clasificacion.categoria }}</mark>
+    <small>confianza {{ fila.clasificacion.confianza }}</small>
+  </p>
+  <p>{{ fila.clasificacion.razonamiento }}</p>
+
+  <h3>Ejes de encaje</h3>
+  <table>
+    <tbody>
+      {% for etiqueta, valor in ejes %}
+      <tr>
+        <th scope="row">{{ etiqueta }}</th>
+        <td>{{ valor }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>Lo que te falta</h3>
+  {% if fila.clasificacion.skills_faltantes %}
+  <ul>
+    {% for skill in fila.clasificacion.skills_faltantes %}
+    <li>{{ skill }}</li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p><small>Nada anotado.</small></p>
+  {% endif %}
+
+  <h3>Señales a vigilar</h3>
+  {% if fila.clasificacion.red_flags %}
+  <ul>
+    {% for bandera in fila.clasificacion.red_flags %}
+    <li><del>{{ bandera }}</del></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p><small>Ninguna anotada.</small></p>
+  {% endif %}
+
+  <h3>Con qué se juzgó</h3>
+  <table>
+    <tbody>
+      <tr>
+        <th scope="row">Modelo</th>
+        <td>{{ fila.clasificacion.modelo }}</td>
+      </tr>
+      <tr>
+        <th scope="row">Versión de prompt</th>
+        <td>{{ fila.clasificacion.prompt_version }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <p class="aviso">Esta oferta todavía no está clasificada.</p>
+  {% endif %}
+
+  <footer>
+    <form method="post" action="/job/{{ fila.oferta.id }}/reclasificar">
+      <button type="submit">Reclasificar</button>
+      <small>
+        Vuelve a preguntar al modelo con el prompt y las preferencias de ahora, y
+        sustituye la clasificación anterior.
+      </small>
+    </form>
+  </footer>
+</article>
+
+<article>
+  <h2>Tu decisión</h2>
+  {% include "_acciones.html" %}
+</article>
+
+<article>
+  <h2>Descripción</h2>
+  {% if fila.oferta.descripcion_truncada %}
+  <p class="aviso">
+    <mark>fragmento</mark>
+    La fuente sólo publicó el principio de la descripción, así que el modelo juzgó
+    con lo que se lee aquí y no con la oferta entera.
+  </p>
+  {% endif %}
+  <p>{{ fila.oferta.descripcion }}</p>
+</article>
+{% endblock %}
