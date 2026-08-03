@@ -15,8 +15,7 @@ clasificación. La interfaz web está sin construir. Ver
 ## Stack
 
 Python 3.12 en un único contenedor Docker, para uso local. SQLite, APScheduler.
-Gemini para la extracción del perfil desde el PDF y para clasificar; DeepSeek
-disponible como proveedor alternativo.
+Gemini y DeepSeek como proveedores de LLM: ver [Modelos](#modelos).
 
 ## Fuentes
 
@@ -38,6 +37,30 @@ Dos consecuencias prácticas:
 - **JSearch lleva presupuesto mensual persistido.** Con run diario, cada búsqueda que
   la use cuesta unos 30 créditos al mes: caben 5 o 6. Al agotarse, la fuente se salta
   y las demás siguen funcionando. Configurable con `JSEARCH_LIMITE_MENSUAL`.
+
+## Modelos
+
+Hay dos proveedores de LLM implementados, **Gemini** y **DeepSeek**, detrás de un mismo
+protocolo (`app/llm/base.py`): un modelo que devuelve JSON conforme a un esquema Pydantic.
+Se elige con `PROVEEDOR_CLASIFICACION`, y añadir un tercero es implementar ese protocolo y
+una rama en la factoría.
+
+| Tarea | Modelo por defecto | Por qué |
+|---|---|---|
+| Clasificar ofertas | `gemini-3.5-flash-lite` (`MODELO_GEMINI`) | Unas 100 llamadas al día. Tiene capa gratuita y cuesta 5x menos en entrada que Flash |
+| Clasificar ofertas (alternativa) | `deepseek-v4-flash` (`MODELO_DEEPSEEK`) | Con `PROVEEDOR_CLASIFICACION=deepseek` |
+| Extraer el perfil del CV | `gemini-3.6-flash` (`MODELO_PERFIL`) | Una sola llamada, multimodal sobre el PDF. Aquí manda la calidad, no el precio |
+
+Dos cosas que conviene saber:
+
+- **La extracción del CV es siempre Gemini.** Es multimodal sobre el PDF y DeepSeek no lo
+  soporta, así que no pasa por el protocolo: vive en `app/profile.py` hablando con Gemini
+  directamente. Poner `PROVEEDOR_CLASIFICACION=deepseek` cambia quién clasifica las
+  ofertas, pero seguirás necesitando `GEMINI_API_KEY` para el comando `cv`.
+- **La cuota agotada no se reintenta.** Cualquier fallo del proveedor se trata como
+  transitorio y se reintenta, salvo el rate limit o la cuota, que se traducen a
+  `CuotaAgotadaError`: ahí el pipeline corta las llamadas, cierra el run y deja la cola
+  para el día siguiente. Reintentar sólo gastaría lo que ya no queda.
 
 ## El CV y el perfil
 
