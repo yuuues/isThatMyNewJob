@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.classify import PROMPT_VERSION, clasifica
 from app.config import get_settings
+from app.cerradas import cierra_oferta, reabre_oferta
 from app.decisiones import (
     ESTADO_APLICADA,
     ESTADO_DESCARTADA_POR_MI,
@@ -167,6 +168,8 @@ def _construye_fila(job: Job, entradas: list[EntradaHistorial]) -> dict:
         "decision": decision,
         "etiqueta_estado": ETIQUETAS.get(decision.estado, decision.estado) if decision else "",
         "fecha": _fecha(job.publicada_en),
+        "cerrada": job.cerrada,
+        "cerrada_en": _fecha(job.cerrada_en),
         "historial": [frase_historial(entrada) for entrada in entradas],
     }
 
@@ -253,6 +256,7 @@ def listado(
     categoria: str = Query(default=""),
     estado: str = Query(default=ESTADO_SIN_DECIDIR),
     q: str = Query(default=""),
+    cerradas: str = Query(default=""),
     sesion: Session = Depends(get_sesion),
 ) -> HTMLResponse:
     """Tablero agrupado por categoría, con filtros.
@@ -263,7 +267,14 @@ def listado(
     """
     candidatas = _ofertas_clasificadas(sesion, fuente=fuente, categoria=categoria)
     visibles = [
-        job for job in candidatas if _coincide_texto(job, q) and _coincide_estado(job, estado)
+        job
+        for job in candidatas
+        if _coincide_texto(job, q)
+        and _coincide_estado(job, estado)
+        # Las cerradas se ocultan salvo que se pidan: el puesto ya no existe y
+        # revisarlas es tiempo perdido. Se ocultan, no se borran, porque su recuento
+        # es lo que dice qué fuente sirve enlaces muertos.
+        and (cerradas == "si" or not job.cerrada)
     ]
 
     historial = historial_por_empresa(sesion, visibles)
@@ -276,7 +287,13 @@ def listado(
         "total": len(filas),
         "fuentes": _fuentes(sesion),
         "categorias": [(c, ETIQUETAS_CATEGORIA[c]) for c in ORDEN_CATEGORIAS],
-        "filtros": {"fuente": fuente, "categoria": categoria, "estado": estado, "q": q},
+        "filtros": {
+            "fuente": fuente,
+            "categoria": categoria,
+            "estado": estado,
+            "q": q,
+            "cerradas": cerradas,
+        },
         "resumen": resumen_candidaturas(sesion),
     }
 
@@ -416,3 +433,23 @@ def reclasificar(
 
     _guarda_clasificacion(sesion, job, veredicto, provider)
     return _pagina_detalle(request, sesion, job)
+
+
+@router.post("/job/{job_id}/cerrada", response_class=HTMLResponse)
+def marca_cerrada(
+    request: Request,
+    job_id: int,
+    abierta: str = Form(default=""),
+    sesion: Session = Depends(get_sesion),
+) -> HTMLResponse:
+    """Marca la oferta como cerrada, o la reabre si se marcó por error.
+
+    No toca la decisión: haber aplicado y que además cierren el puesto son dos cosas
+    ciertas a la vez, y perder la primera al registrar la segunda sería falsear el
+    seguimiento de candidaturas.
+    """
+    job = _oferta(sesion, job_id)
+    job = reabre_oferta(sesion, job.id) if abierta == "si" else cierra_oferta(sesion, job.id)
+
+    contexto = {**_contexto_comun(), "fila": _fila_de(sesion, job)}
+    return get_plantillas().TemplateResponse(request, "_acciones.html", contexto)

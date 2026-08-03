@@ -222,4 +222,37 @@
       <p><small>Ninguna oferta atascada.</small></p>
     {% endif %}
   </section>
+
+<article>
+  <h2>Ofertas cerradas por fuente</h2>
+  <p>
+    <small>
+      Una oferta que ya no existe cuando abres el enlace hace perder el tiempo: se
+      abre, se lee y no lleva a ninguna parte. Este recuento dice qué fuente sirve
+      ofertas caducadas, para poder retirarla con datos en vez de por sensación.
+    </small>
+  </p>
+  {% if cerradas %}
+  <table>
+    <thead>
+      <tr><th>Fuente</th><th>Cerradas</th><th>Total</th><th>Proporción</th></tr>
+    </thead>
+    <tbody>
+      {% for fuente, dato in cerradas | dictsort %}
+      <tr>
+        <td>{{ fuente }}</td>
+        <td>{{ dato.cerradas }}</td>
+        <td>{{ dato.total }}</td>
+        <td>
+          {% if dato.total %}{{ (dato.cerradas * 100 // dato.total) }}%{% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p><small>Todavía no hay ofertas ingeridas.</small></p>
+  {% endif %}
+</article>
+
 {% endblock %}

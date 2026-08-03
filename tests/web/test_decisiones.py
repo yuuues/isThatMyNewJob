@@ -234,3 +234,52 @@ def test_un_rechazo_de_la_empresa_no_llega_al_few_shot(
     assert respuesta.status_code == 200
     assert decision_de(sesion, oferta.id).estado == ESTADO_RECHAZADO_POR_ELLOS
     assert ejemplos_few_shot(sesion) == []
+
+
+# --- Ofertas cerradas ---------------------------------------------------
+
+
+def test_marcar_cerrada_no_borra_la_decision(cliente: TestClient, sesion, crea_oferta):
+    """El caso real: te presentas y luego retiran el puesto. Las dos cosas son ciertas."""
+    job = crea_oferta()
+    cliente.post(f"/job/{job.id}/decision", data={"estado": "aplicada", "motivo": "me presenté"})
+
+    respuesta = cliente.post(f"/job/{job.id}/cerrada")
+
+    assert respuesta.status_code == 200
+    sesion.refresh(job)
+    assert job.cerrada is True
+    assert job.decision.estado == "aplicada"
+
+
+def test_reabrir_deshace_la_marca(cliente: TestClient, sesion, crea_oferta):
+    job = crea_oferta()
+    cliente.post(f"/job/{job.id}/cerrada")
+
+    cliente.post(f"/job/{job.id}/cerrada", data={"abierta": "si"})
+
+    sesion.refresh(job)
+    assert job.cerrada is False
+
+
+def test_cerrar_una_oferta_inexistente_responde_404(cliente: TestClient):
+    assert cliente.post("/job/999/cerrada").status_code == 404
+
+
+def test_las_cerradas_desaparecen_del_listado(cliente: TestClient, sesion, crea_clasificada):
+    """El puesto ya no existe: revisarlo es tiempo perdido."""
+    viva = crea_clasificada(titulo="Sigue abierta")
+    muerta = crea_clasificada(titulo="Ya cerrada")
+    cliente.post(f"/job/{muerta.id}/cerrada")
+
+    texto = cliente.get("/").text
+
+    assert viva.titulo in texto
+    assert muerta.titulo not in texto
+
+
+def test_el_filtro_las_recupera(cliente: TestClient, sesion, crea_clasificada):
+    muerta = crea_clasificada(titulo="Ya cerrada")
+    cliente.post(f"/job/{muerta.id}/cerrada")
+
+    assert muerta.titulo in cliente.get("/?cerradas=si").text

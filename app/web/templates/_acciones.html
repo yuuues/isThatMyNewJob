@@ -64,4 +64,23 @@
 
     <button type="submit">Guardar decisión</button>
   </form>
+
+  {# La oferta cerrada NO es una decisión: es un estado de la oferta, y por eso va en
+     su propio formulario. Se puede haber aplicado y que además retiren el puesto. #}
+  <form
+    method="post"
+    action="/job/{{ fila.oferta.id }}/cerrada"
+    hx-post="/job/{{ fila.oferta.id }}/cerrada"
+    hx-target="#decision-{{ fila.oferta.id }}"
+    hx-swap="outerHTML"
+  >
+    {% if fila.cerrada %}
+    <input type="hidden" name="abierta" value="si" />
+    <small>Marcada como cerrada{% if fila.cerrada_en %} el {{ fila.cerrada_en }}{% endif %}.</small>
+    <button type="submit" class="secondary">Volver a abrirla</button>
+    {% else %}
+    <small>Si el enlace ya no lleva a ninguna parte, márcala y desaparecerá del listado.</small>
+    <button type="submit" class="secondary">La oferta ya no existe</button>
+    {% endif %}
+  </form>
 </details>

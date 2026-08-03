@@ -437,3 +437,18 @@ def test_la_plantilla_no_inventa_clases_ni_estilos_propios(cliente: TestClient, 
     assert "<style" not in html
     usadas = {c for atributo in re.findall(r'class="([^"]*)"', html) for c in atributo.split()}
     assert usadas <= CLASES_PERMITIDAS, f"clases desconocidas: {usadas - CLASES_PERMITIDAS}"
+
+
+def test_la_vista_cuenta_las_ofertas_cerradas_por_fuente(cliente: TestClient, sesion, crea_oferta):
+    """Convierte una sensación ("me pasa mucho con adzuna") en un dato con el que
+    decidir si conviene retirar una fuente."""
+    from app.cerradas import cierra_oferta
+
+    cierra_oferta(sesion, crea_oferta(fuente="adzuna").id)
+    cierra_oferta(sesion, crea_oferta(fuente="adzuna").id)
+    crea_oferta(fuente="scrappa")
+
+    texto = cliente.get("/runs").text
+
+    assert "Ofertas cerradas por fuente" in texto
+    assert "adzuna" in texto

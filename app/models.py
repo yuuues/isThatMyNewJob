@@ -73,6 +73,12 @@ class Job(Base):
     # pendiente | clasificada | descartada_por_regla | error
     estado_clasificacion: Mapped[str] = mapped_column(String, default="pendiente")
     motivo_regla: Mapped[str | None] = mapped_column(String, default=None)
+
+    # El puesto ya no existe cuando se abre el enlace. Es un atributo de la OFERTA,
+    # no una decisión: se puede haber aplicado y que además la cierren. Ver
+    # app/cerradas.py.
+    cerrada: Mapped[bool] = mapped_column(default=False)
+    cerrada_en: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     intentos_clasificacion: Mapped[int] = mapped_column(Integer, default=0)
 
     clasificacion: Mapped["Clasificacion | None"] = relationship(

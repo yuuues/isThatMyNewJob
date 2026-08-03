@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.models import ConsumoFuente, Job, Run
 from app.web.deps import get_plantillas, get_sesion
+from app.cerradas import cerradas_por_fuente
 
 router = APIRouter()
 
@@ -178,6 +179,7 @@ def _pagina(request: Request, sesion: Session, aviso: str | None = None) -> HTML
         "runs.html",
         {
             "titulo": "Ejecuciones",
+            "cerradas": cerradas_por_fuente(sesion),
             "cupo": _cupo(sesion),
             "runs": _runs(sesion),
             "descartes": _descartes(sesion),

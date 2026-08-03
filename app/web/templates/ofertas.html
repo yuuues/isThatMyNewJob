@@ -58,6 +58,11 @@
       {% endfor %}
     </select>
 
+    <select name="cerradas" aria-label="Ofertas cerradas">
+      <option value=""{% if not filtros.cerradas %} selected{% endif %}>Ocultar las cerradas</option>
+      <option value="si"{% if filtros.cerradas == "si" %} selected{% endif %}>Incluir las cerradas</option>
+    </select>
+
     <button type="submit">Filtrar</button>
   </fieldset>
 </form>
