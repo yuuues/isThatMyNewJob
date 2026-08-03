@@ -1,6 +1,6 @@
 import pytest
 
-from app.classify import PROMPT_VERSION, construye_prompt_usuario, clasifica
+from app.classify import PROMPT_SISTEMA, PROMPT_VERSION, construye_prompt_usuario, clasifica
 from app.feedback import PRESUPUESTO_CARACTERES, EjemploDecision, ejemplos_few_shot
 from app.llm.fake import FakeProvider
 from app.models import Decision, Job
@@ -212,7 +212,7 @@ def test_el_prompt_avisa_cuando_la_descripcion_viene_cortada():
     )
 
     assert "está cortado" in prompt
-    assert "no los estás viendo" in prompt
+    assert "decide con lo visible" in prompt
 
 
 def test_sin_truncar_no_aparece_el_aviso():
@@ -221,3 +221,15 @@ def test_sin_truncar_no_aparece_el_aviso():
     )
 
     assert "está cortado" not in prompt
+
+
+def test_el_prompt_dice_que_el_salario_no_publicado_es_lo_normal():
+    """La v1 producía 111 'revisar' de 179 porque la ausencia de salario disparaba la
+    regla de información insuficiente. En España se publica en menos del 10% de las
+    ofertas: es el estándar, no un dato que falte."""
+    assert "CASI NUNCA SE PUBLICA EN ESPAÑA" in PROMPT_SISTEMA
+    assert "NO bajes la confianza" in PROMPT_SISTEMA
+
+
+def test_el_prompt_define_la_confianza_sobre_la_decision_no_sobre_la_oferta():
+    assert "lo seguro que estás de TU DECISIÓN" in PROMPT_SISTEMA

@@ -4,7 +4,11 @@ from app.feedback import EjemploDecision
 from app.llm.base import LLMProvider
 from app.schemas import PerfilCandidato, Preferencias, RawJob, ResultadoClasificacion
 
-PROMPT_VERSION = 1
+# v2: la v1 producía 111 "revisar" de 179 ofertas, 93 de ellas con confianza baja.
+# Dos causas medidas: la regla del salario se disparaba en casi todas las ofertas (en
+# España casi nadie lo publica) y las descripciones truncadas llevaban al modelo a
+# abstenerse en lugar de juzgar con lo visible.
+PROMPT_VERSION = 2
 
 MAX_CARACTERES_DESCRIPCION = 6000
 
@@ -12,21 +16,33 @@ PROMPT_SISTEMA = """\
 Evalúas si una oferta de empleo encaja con un candidato concreto. Devuelves una \
 categoría, no una nota.
 
+Tu cometido es AHORRARLE TRABAJO al candidato: decidir cuáles merece abrir. Una lista \
+donde casi todo queda en "revisar" no le sirve de nada, porque le obliga a leerlas todas \
+igualmente. Mójate.
+
 Categorías:
-- aplicar_ya: encaja con el perfil y respeta todas las preferencias. El candidato debería aplicar.
-- revisar: encaja parcialmente, o falta información relevante para decidir.
+- aplicar_ya: encaja con el perfil y respeta las preferencias. Merece que lo abra hoy.
+- revisar: puede encajar, pero hay algo concreto que sólo él puede decidir.
 - descartar: no encaja, o incumple alguna preferencia del candidato.
 
 Reglas que no puedes saltarte:
-1. Si un dato no aparece en la oferta (típicamente el salario), escribe "no publicado". \
-Nunca lo estimes ni lo infieras.
+1. Si un dato no aparece en la oferta, escribe "no publicado". Nunca lo estimes ni lo \
+infieras.
 2. Si la oferta incumple una preferencia explícita del candidato, la categoría es \
 "descartar" por muy bueno que sea el encaje técnico.
-3. Si no hay información suficiente para decidir, usa "revisar" con confianza "baja". \
-No adivines.
-4. El razonamiento son 2 o 3 frases, en español, dirigidas al candidato. Sin adjetivos \
+3. EL SALARIO CASI NUNCA SE PUBLICA EN ESPAÑA: medido, aparece en menos del 10% de las \
+ofertas. Su ausencia es lo normal, no información que falte. NO bajes la confianza ni \
+uses "revisar" por no saber el salario. Anótalo en red_flags y decide por lo demás.
+4. Si la descripción viene cortada, juzga con lo que tienes: el título y el primer \
+párrafo casi siempre revelan la tecnología y el nivel, que es lo que determina el encaje. \
+Usa "revisar" sólo cuando lo VISIBLE sea ambiguo sobre el encaje, no por el mero hecho de \
+estar incompleto.
+5. La confianza mide lo seguro que estás de TU DECISIÓN, no lo completa que esté la \
+oferta. Si el título dice "Java Senior" y el candidato es de PHP, tu confianza es alta \
+aunque no veas el resto.
+6. El razonamiento son 2 o 3 frases, en español, dirigidas al candidato. Sin adjetivos \
 vacíos ni lenguaje de venta.
-5. En red_flags anota sólo señales objetivas presentes en el texto de la oferta \
+7. En red_flags anota sólo señales objetivas presentes en el texto de la oferta \
 (ausencia de salario, requisitos desproporcionados, contrato precario, exigencias \
 incoherentes con el puesto). No especules sobre la empresa.
 """
@@ -83,8 +99,9 @@ def _bloque_oferta(job: RawJob) -> str:
     salario = _formatea_salario(job)
     aviso = (
         "\n\nAVISO: la fuente sólo publica el principio de la descripción, así que lo "
-        "anterior está cortado. Los requisitos, el stack y las condiciones probablemente "
-        "no aparecen. No deduzcas que faltan del puesto: no los estás viendo."
+        "anterior está cortado. No deduzcas que un requisito falte del puesto por no "
+        "verlo aquí. Aun así, decide con lo visible: el título y este fragmento suelen "
+        "bastar para saber la tecnología y el nivel."
         if job.descripcion_truncada
         else ""
     )

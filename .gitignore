@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 
+# Preferencias reales del usuario (seed.example.yaml sí se versiona)
+seed.yaml
+
 # Datos locales: base de datos y CV subido
 data/
 *.db
