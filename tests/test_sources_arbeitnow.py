@@ -35,12 +35,25 @@ def test_normaliza_una_oferta_remota():
 
 
 @respx.mock
-def test_una_oferta_no_remota_se_marca_presencial():
+def test_remote_false_no_significa_presencial():
+    """Arbeitnow deja `remote` en false por defecto. Marcarlo como presencial hacía que
+    el prefiltro descartase 39 de cada 50 ofertas sin que el modelo las viera. Un false
+    sólo dice que la fuente no lo ha marcado, así que se recurre al texto y, si no dice
+    nada, queda "desconocida" y sobrevive al prefiltro."""
     respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
 
     ofertas = ArbeitnowSource().search(SearchQuery(nombre="todo", texto="passau"))
 
-    assert ofertas[0].modalidad == "presencial"
+    assert ofertas[0].modalidad == "desconocida"
+
+
+@respx.mock
+def test_remote_true_si_se_cree():
+    respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+
+    ofertas = ArbeitnowSource().search(SearchQuery(nombre="php", texto="php"))
+
+    assert ofertas[0].modalidad == "remoto"
 
 
 @respx.mock

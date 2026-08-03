@@ -70,6 +70,16 @@ def _esta_vetado(texto: str, termino: str) -> bool:
     return patron is not None and patron.search(texto) is not None
 
 
+# Ubicaciones de ámbito nacional. Una oferta situada en "España" contiene a Madrid y a
+# Barcelona, así que un filtro de ciudades no puede descartarla: sería descartar por no
+# saber, y este módulo descarta sólo cuando sabe. Medido: 5 ofertas perdidas así.
+_AMBITO_NACIONAL = {"espana", "spain", "toda espana", "nacional", "remoto", "remote"}
+
+
+def _es_ambito_nacional(ubicacion_normalizada: str) -> bool:
+    return ubicacion_normalizada in _AMBITO_NACIONAL
+
+
 @dataclass(frozen=True)
 class ResultadoPrefiltro:
     descartada: bool
@@ -113,8 +123,9 @@ def aplica_prefiltro(job: RawJob, prefs: Preferencias) -> ResultadoPrefiltro:
 
     if job.modalidad in ("presencial", "hibrido") and prefs.zonas:
         ubicacion = normaliza(job.ubicacion)
-        if not any(normaliza(z) in ubicacion for z in prefs.zonas):
-            return ResultadoPrefiltro(True, f"zona fuera de rango: {job.ubicacion}")
+        if ubicacion and not _es_ambito_nacional(ubicacion):
+            if not any(normaliza(z) in ubicacion for z in prefs.zonas):
+                return ResultadoPrefiltro(True, f"zona fuera de rango: {job.ubicacion}")
 
     if prefs.salario_min is not None and job.salario_max is not None:
         if job.salario_max < prefs.salario_min:

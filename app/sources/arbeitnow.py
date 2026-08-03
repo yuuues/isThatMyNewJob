@@ -6,6 +6,7 @@ from app.dedup import normaliza
 from app.limitador import LimitadorPorHost
 from app.schemas import RawJob, SearchQuery
 from app.sources.base import FuenteFiltradaEnLocal
+from app.sources.comun import detecta_modalidad
 from app.sources.remotive import html_a_texto
 
 URL_API = "https://www.arbeitnow.com/api/job-board-api"
@@ -64,11 +65,25 @@ class ArbeitnowSource(FuenteFiltradaEnLocal):
             titulo=bruto["title"],
             empresa=bruto["company_name"],
             ubicacion=bruto.get("location") or None,
-            modalidad="remoto" if bruto.get("remote") else "presencial",
+            modalidad=self._modalidad(bruto),
             descripcion=html_a_texto(bruto.get("description", "")),
             publicada_en=self._fecha(bruto.get("created_at")),
             tags=bruto.get("tags") or [],
         )
+
+    @staticmethod
+    def _modalidad(bruto: dict):
+        """`remote: true` se cree; `false` no.
+
+        Antes un `false` se traducía directamente a "presencial", y como Arbeitnow lo
+        deja en false por defecto, 39 de cada 50 ofertas quedaban marcadas así y el
+        prefiltro las descartaba sin que el modelo llegase a verlas. Un `false` sólo
+        significa que la fuente no lo ha marcado, no que el puesto sea presencial:
+        se recurre al texto y, si no dice nada, queda "desconocida" y no se descarta.
+        """
+        if bruto.get("remote"):
+            return "remoto"
+        return detecta_modalidad(f"{bruto.get('title', '')} {bruto.get('description', '')}")
 
     @staticmethod
     def _fecha(valor: int | None) -> datetime | None:

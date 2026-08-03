@@ -230,3 +230,24 @@ def test_una_oferta_que_encaja_sobrevive():
 
     assert resultado.descartada is False
     assert resultado.motivo is None
+
+
+def test_no_descarta_una_oferta_de_ambito_nacional_por_el_filtro_de_ciudades():
+    """Una oferta situada en 'España' contiene a Madrid: descartarla es descartar por
+    no saber. Medido en datos reales: 5 ofertas de Adzuna perdidas así."""
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid", "barcelona"])
+
+    assert aplica_prefiltro(job(modalidad="presencial", ubicacion="España"), prefs).descartada is False
+    assert aplica_prefiltro(job(modalidad="presencial", ubicacion="Spain"), prefs).descartada is False
+
+
+def test_sigue_descartando_una_ciudad_concreta_fuera_de_zona():
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid", "barcelona"])
+
+    assert aplica_prefiltro(job(modalidad="presencial", ubicacion="Sevilla"), prefs).descartada is True
+
+
+def test_una_ubicacion_vacia_no_descarta():
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid"])
+
+    assert aplica_prefiltro(job(modalidad="presencial", ubicacion=None), prefs).descartada is False

@@ -5,7 +5,7 @@ import httpx
 from app.limitador import LimitadorPorHost
 from app.schemas import RawJob, SearchQuery
 from app.sources.base import FuenteConFiltroEnServidor
-from app.sources.comun import detecta_modalidad
+from app.sources.comun import detecta_modalidad, salario_anual
 
 # Verificado contra la API real el 2026-08-03: las descripciones llegan cortadas a
 # 500 caracteres. No es configurable ni hay un campo con el texto completo.
@@ -83,7 +83,7 @@ class AdzunaSource(FuenteConFiltroEnServidor):
     def _normaliza(self, bruto: dict) -> RawJob:
         descripcion = bruto.get("description", "")
         titulo = bruto.get("title", "")
-        salario_min, salario_max = self._salario_publicado(bruto)
+        salario_min, salario_max, salario_texto = self._salario_publicado(bruto)
         return RawJob(
             fuente=self.nombre,
             external_id=str(bruto["id"]),
@@ -94,13 +94,14 @@ class AdzunaSource(FuenteConFiltroEnServidor):
             modalidad=detecta_modalidad(f"{titulo} {descripcion}"),
             salario_min=salario_min,
             salario_max=salario_max,
+            salario_texto=salario_texto,
             descripcion=descripcion,
             descripcion_truncada=self._esta_truncada(descripcion),
             publicada_en=self._fecha(bruto.get("created")),
         )
 
     @staticmethod
-    def _salario_publicado(bruto: dict) -> tuple[float | None, float | None]:
+    def _salario_publicado(bruto: dict) -> tuple[float | None, float | None, str | None]:
         """Descarta los salarios que Adzuna estima en vez de publicar.
 
         `salary_is_predicted` llega como cadena "0"/"1". Cuando vale "1" la cifra es
@@ -109,10 +110,13 @@ class AdzunaSource(FuenteConFiltroEnServidor):
         prefiltro descartaría ofertas por un sueldo que nadie llegó a ofrecer.
 
         Medido sobre 50 ofertas reales: sólo 4 traen salario de cualquier tipo.
+
+        Adzuna tampoco publica el periodo, así que las cifras que no pueden ser anuales
+        (tarifas por hora) salen como texto y no como número: ver salario_anual().
         """
         if str(bruto.get("salary_is_predicted", "0")) == "1":
-            return None, None
-        return bruto.get("salary_min"), bruto.get("salary_max")
+            return None, None, None
+        return salario_anual(bruto.get("salary_min"), bruto.get("salary_max"))
 
     @staticmethod
     def _esta_truncada(descripcion: str) -> bool:
