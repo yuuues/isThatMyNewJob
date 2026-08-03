@@ -1,0 +1,28 @@
+# Secretos
+.env
+.env.*
+!.env.example
+
+# Datos locales: base de datos y CV subido
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
