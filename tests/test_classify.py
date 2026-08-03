@@ -200,3 +200,24 @@ def test_el_bloque_de_ejemplos_respeta_el_presupuesto(sesion):
 def test_la_version_del_prompt_es_un_entero_positivo():
     assert isinstance(PROMPT_VERSION, int)
     assert PROMPT_VERSION >= 1
+
+
+def test_el_prompt_avisa_cuando_la_descripcion_viene_cortada():
+    """Sin este aviso el modelo interpreta la ausencia de requisitos como que el puesto
+    no los tiene, en vez de como que no los está viendo."""
+    cortada = oferta().model_copy(update={"descripcion_truncada": True})
+
+    prompt = construye_prompt_usuario(
+        cortada, perfil=perfil(), prefs=Preferencias(), ejemplos=[]
+    )
+
+    assert "está cortado" in prompt
+    assert "no los estás viendo" in prompt
+
+
+def test_sin_truncar_no_aparece_el_aviso():
+    prompt = construye_prompt_usuario(
+        oferta(), perfil=perfil(), prefs=Preferencias(), ejemplos=[]
+    )
+
+    assert "está cortado" not in prompt

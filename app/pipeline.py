@@ -50,6 +50,7 @@ def _a_rawjob(job: Job) -> RawJob:
         salario_max=job.salario_max,
         salario_texto=job.salario_texto,
         descripcion=job.descripcion,
+        descripcion_truncada=job.descripcion_truncada,
         publicada_en=job.publicada_en,
         tags=job.tags or [],
     )

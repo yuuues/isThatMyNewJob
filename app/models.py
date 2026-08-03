@@ -64,6 +64,7 @@ class Job(Base):
     salario_max: Mapped[float | None] = mapped_column(Float, default=None)
     salario_texto: Mapped[str | None] = mapped_column(String, default=None)
     descripcion: Mapped[str] = mapped_column(Text)
+    descripcion_truncada: Mapped[bool] = mapped_column(default=False)
     tags: Mapped[list] = mapped_column(JSON, default=list)
     publicada_en: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     ingerida_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)

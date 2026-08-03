@@ -10,6 +10,10 @@ from app.sources.base import FuenteConFiltroEnServidor
 _PALABRAS_REMOTO = ("remoto", "teletrabajo", "remote", "full remote", "en remoto")
 _PALABRAS_HIBRIDO = ("hibrido", "híbrido", "hybrid", "semipresencial")
 
+# Verificado contra la API real el 2026-08-03: las descripciones llegan cortadas a
+# 500 caracteres. No es configurable ni hay un campo con el texto completo.
+_LIMITE_DESCRIPCION = 500
+
 
 def url_api(pais: str) -> str:
     return f"https://api.adzuna.com/v1/api/jobs/{pais}/search/1"
@@ -92,6 +96,7 @@ class AdzunaSource(FuenteConFiltroEnServidor):
     def _normaliza(self, bruto: dict) -> RawJob:
         descripcion = bruto.get("description", "")
         titulo = bruto.get("title", "")
+        salario_min, salario_max = self._salario_publicado(bruto)
         return RawJob(
             fuente=self.nombre,
             external_id=str(bruto["id"]),
@@ -100,11 +105,36 @@ class AdzunaSource(FuenteConFiltroEnServidor):
             empresa=(bruto.get("company") or {}).get("display_name", "Desconocida"),
             ubicacion=(bruto.get("location") or {}).get("display_name"),
             modalidad=detecta_modalidad(f"{titulo} {descripcion}"),
-            salario_min=bruto.get("salary_min"),
-            salario_max=bruto.get("salary_max"),
+            salario_min=salario_min,
+            salario_max=salario_max,
             descripcion=descripcion,
+            descripcion_truncada=self._esta_truncada(descripcion),
             publicada_en=self._fecha(bruto.get("created")),
         )
+
+    @staticmethod
+    def _salario_publicado(bruto: dict) -> tuple[float | None, float | None]:
+        """Descarta los salarios que Adzuna estima en vez de publicar.
+
+        `salary_is_predicted` llega como cadena "0"/"1". Cuando vale "1" la cifra es
+        una predicción del propio Adzuna, no un dato de la oferta. Tratarla como
+        publicada rompe la regla del prompt de no estimar salarios, y peor: el
+        prefiltro descartaría ofertas por un sueldo que nadie llegó a ofrecer.
+
+        Medido sobre 50 ofertas reales: sólo 4 traen salario de cualquier tipo.
+        """
+        if str(bruto.get("salary_is_predicted", "0")) == "1":
+            return None, None
+        return bruto.get("salary_min"), bruto.get("salary_max")
+
+    @staticmethod
+    def _esta_truncada(descripcion: str) -> bool:
+        """Adzuna corta a 500 caracteres y remata con puntos suspensivos.
+
+        Se comprueban las dos señales por separado: el límite podría cambiar, y una
+        descripción corta también puede venir cortada si el original lo estaba.
+        """
+        return descripcion.endswith("…") or len(descripcion) >= _LIMITE_DESCRIPCION
 
     @staticmethod
     def _fecha(valor: str | None) -> datetime | None:

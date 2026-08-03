@@ -1,27 +1,83 @@
 {
-  "count": 2,
+  "__COMENTARIO__": "Respuesta REAL de api.adzuna.com/v1/api/jobs/es/search/1 (what=desarrollador php), grabada el 2026-08-03. Descripciones acortadas para el fixture y credenciales eliminadas de redirect_url y adref. Adzuna NO devuelve contract_time, y salary_min/salary_max faltan en la mayoria de ofertas: 4 de 50 en la muestra. La tercera oferta es sintetica, para cubrir salary_is_predicted=1.",
+  "__CLASS__": "Adzuna::API::Response::JobSearchResults",
+  "count": 287,
+  "mean": 31250.5,
   "results": [
     {
-      "id": "4912345678",
-      "title": "Desarrollador PHP Senior",
-      "description": "Buscamos un desarrollador PHP senior para el equipo de backend en Madrid con experiencia en Laravel.",
-      "created": "2026-07-30T09:12:00Z",
-      "redirect_url": "https://www.adzuna.es/land/ad/4912345678",
-      "company": { "display_name": "Acme S.L." },
-      "location": { "display_name": "Madrid, Comunidad de Madrid", "area": ["España", "Comunidad de Madrid", "Madrid"] },
-      "salary_min": 45000,
-      "salary_max": 60000,
-      "contract_time": "full_time"
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "id": "5742309584",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.RECORTADO",
+      "title": "Desarrollador/a Magento  PHP Senior (hybrid)",
+      "description": "Levata es una empresa tecnológica especializada en soluciones de movilidad, automatización y visibilidad para empresas. Buscamos perfil senior con experiencia en Magento y PHP para el equipo de Madrid…",
+      "created": "2026-05-27T17:28:54Z",
+      "redirect_url": "https://www.adzuna.es/details/5742309584",
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Levata"
+      },
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "display_name": "Madrid",
+        "area": ["España", "Comunidad de Madrid", "Madrid", "Madrid"]
+      },
+      "category": {
+        "__CLASS__": "Adzuna::API::Response::Category",
+        "label": "Unknown",
+        "tag": "unknown"
+      },
+      "salary_min": 36000,
+      "salary_max": 45000,
+      "salary_is_predicted": "0",
+      "latitude": 40.426012,
+      "longitude": -3.684093
     },
     {
-      "id": "4912345679",
-      "title": "Backend Engineer (teletrabajo)",
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "id": "5787686624",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.RECORTADO",
+      "title": "Desarrollador PHP",
+      "description": "Desarrollador PHP Company: Ad1gate Tech Sevilla Location: Calle Torneo, 24, 41002 Sevilla, Andalucía, Spain Salary: €2,200 per month Job Type: Full-time Job Description Ad1gate Tec…",
+      "created": "2026-07-04T09:44:05Z",
+      "redirect_url": "https://www.adzuna.es/details/5787686624",
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Ad1gate Tech Sevilla"
+      },
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "display_name": "Sevilla",
+        "area": ["España", "Andalucía", "Sevilla", "Sevilla"]
+      },
+      "category": {
+        "__CLASS__": "Adzuna::API::Response::Category",
+        "label": "Unknown",
+        "tag": "unknown"
+      },
+      "salary_is_predicted": "0",
+      "latitude": 37.396046,
+      "longitude": -5.998177
+    },
+    {
+      "__CLASS__": "Adzuna::API::Response::Job",
+      "id": "5799001122",
+      "adref": "eyJhbGciOiJIUzI1NiJ9.RECORTADO",
+      "title": "Backend Engineer PHP (teletrabajo)",
       "description": "Puesto en remoto para toda España, trabajando con Symfony y PostgreSQL en el equipo de plataforma.",
       "created": "2026-07-31T11:00:00Z",
-      "redirect_url": "https://www.adzuna.es/land/ad/4912345679",
-      "company": { "display_name": "Beta Tech" },
-      "location": { "display_name": "España", "area": ["España"] },
-      "contract_time": "full_time"
+      "redirect_url": "https://www.adzuna.es/details/5799001122",
+      "company": {
+        "__CLASS__": "Adzuna::API::Response::Company",
+        "display_name": "Beta Tech"
+      },
+      "location": {
+        "__CLASS__": "Adzuna::API::Response::Location",
+        "display_name": "España",
+        "area": ["España"]
+      },
+      "salary_min": 28000,
+      "salary_max": 34000,
+      "salary_is_predicted": "1"
     }
   ]
 }

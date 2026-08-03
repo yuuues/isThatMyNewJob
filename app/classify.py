@@ -81,6 +81,13 @@ def _formatea_salario(job: RawJob) -> str:
 def _bloque_oferta(job: RawJob) -> str:
     descripcion = job.descripcion[:MAX_CARACTERES_DESCRIPCION]
     salario = _formatea_salario(job)
+    aviso = (
+        "\n\nAVISO: la fuente sólo publica el principio de la descripción, así que lo "
+        "anterior está cortado. Los requisitos, el stack y las condiciones probablemente "
+        "no aparecen. No deduzcas que faltan del puesto: no los estás viendo."
+        if job.descripcion_truncada
+        else ""
+    )
     return (
         f"Título: {job.titulo}\n"
         f"Empresa: {job.empresa}\n"
@@ -88,7 +95,7 @@ def _bloque_oferta(job: RawJob) -> str:
         f"Modalidad detectada: {job.modalidad}\n"
         f"Salario: {salario}\n"
         f"Fuente: {job.fuente}\n"
-        f"Descripción:\n{descripcion}"
+        f"Descripción:\n{descripcion}{aviso}"
     )
 
 

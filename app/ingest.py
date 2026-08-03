@@ -22,6 +22,7 @@ def _a_modelo(oferta: RawJob, clave: str) -> Job:
         salario_max=oferta.salario_max,
         salario_texto=oferta.salario_texto,
         descripcion=oferta.descripcion,
+        descripcion_truncada=oferta.descripcion_truncada,
         tags=oferta.tags,
         publicada_en=oferta.publicada_en,
         hash_dedup=clave,

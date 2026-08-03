@@ -36,6 +36,10 @@ class RawJob(BaseModel):
     publicada_en: datetime | None = None
     tags: list[str] = Field(default_factory=list)
 
+    # Adzuna corta las descripciones a 500 caracteres, así que el clasificador nunca
+    # ve requisitos ni condiciones. Debe saberlo para no juzgar sobre lo que no tiene.
+    descripcion_truncada: bool = False
+
 
 class Preferencias(BaseModel):
     salario_min: float | None = None

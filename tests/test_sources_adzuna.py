@@ -34,12 +34,41 @@ def test_normaliza_una_oferta_al_esquema_comun():
 
     primera = ofertas[0]
     assert primera.fuente == "adzuna"
-    assert primera.external_id == "4912345678"
-    assert primera.empresa == "Acme S.L."
-    assert primera.ubicacion == "Madrid, Comunidad de Madrid"
-    assert primera.salario_min == 45000
-    assert primera.salario_max == 60000
-    assert primera.url == "https://www.adzuna.es/land/ad/4912345678"
+    assert primera.external_id == "5742309584"
+    assert primera.empresa == "Levata"
+    assert primera.ubicacion == "Madrid"
+    assert primera.salario_min == 36000
+    assert primera.salario_max == 45000
+    assert primera.url == "https://www.adzuna.es/details/5742309584"
+
+
+@respx.mock
+def test_un_salario_estimado_por_adzuna_no_cuenta_como_publicado():
+    """`salary_is_predicted` = "1" significa que la cifra la estima Adzuna, no la oferta.
+
+    Tratarla como publicada haría que el prefiltro descartase ofertas por un sueldo
+    que nadie llegó a ofrecer, y que el prompt presentase una estimación como dato.
+    """
+    respx.get(url_api("es")).mock(return_value=httpx.Response(200, json=FIXTURE))
+
+    ofertas = fuente().search(SearchQuery(nombre="php", texto="php"))
+
+    estimada = next(o for o in ofertas if o.external_id == "5799001122")
+    assert estimada.salario_min is None
+    assert estimada.salario_max is None
+
+
+@respx.mock
+def test_marca_las_descripciones_cortadas_por_adzuna():
+    """Adzuna corta a 500 caracteres. El clasificador debe saber que no lo ve todo."""
+    respx.get(url_api("es")).mock(return_value=httpx.Response(200, json=FIXTURE))
+
+    ofertas = fuente().search(SearchQuery(nombre="php", texto="php"))
+
+    truncada = next(o for o in ofertas if o.external_id == "5787686624")
+    completa = next(o for o in ofertas if o.external_id == "5799001122")
+    assert truncada.descripcion_truncada is True
+    assert completa.descripcion_truncada is False
 
 
 @respx.mock
