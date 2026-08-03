@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # El plan gratuito son 200 créditos/mes con límite duro. Se deja margen para
     # las peticiones manuales de diagnóstico, que también descuentan.
     jsearch_limite_mensual: int = 180
-    jsearch_paginas: int = 1
+    jsearch_paginas: int = 2
 
     ruta_bd: str = "data/app.db"
     hora_run_diario: str = "07:00"

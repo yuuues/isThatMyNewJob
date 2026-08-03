@@ -578,13 +578,22 @@ def reevaluar_prefiltro(
 # --------------------------------------------------------------------------
 
 
-def creditos_por_run(sesion: Session, paginas: int = 1) -> int:
+def creditos_por_run(sesion: Session, paginas: int | None = None) -> int:
     """Créditos de JSearch que gasta un run con las búsquedas activas de ahora.
 
     JSearch cobra por petición y pide una petición por página y búsqueda, así que el
     coste es el número de búsquedas activas que la incluyen por las páginas pedidas.
     Las inactivas no cuentan porque el run no las ejecuta.
+
+    Sin argumento se leen las páginas configuradas. Antes el defecto era 1 fijo, que
+    contradice la configuración en cuanto alguien sube las páginas: quien llamara sin
+    pasarlas obtendría la mitad del gasto real y creería tener cupo de sobra.
     """
+    if paginas is None:
+        from app.config import get_settings
+
+        paginas = get_settings().jsearch_paginas
+
     filas = sesion.scalars(select(BusquedaGuardada).where(BusquedaGuardada.activa)).all()
     return sum(paginas for fila in filas if "jsearch" in (fila.fuentes or []))
 

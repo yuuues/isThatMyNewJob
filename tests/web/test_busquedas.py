@@ -19,6 +19,7 @@ from sqlalchemy import select
 
 from app.cli import _busquedas_activas
 from app.models import BusquedaGuardada, Run
+from app.config import get_settings
 from app.web import routes_config
 from app.web.routes_config import LimitadorDeRuns, get_lanzador_run
 
@@ -190,7 +191,7 @@ def test_desactivar_una_busqueda_la_excluye_del_run(cliente: TestClient, sesion)
 
 
 @pytest.mark.parametrize(
-    ("busquedas", "esperado"),
+    ("busquedas", "busquedas_con_jsearch"),
     [
         ([], 0),
         ([{"fuentes": ["remotive", "adzuna"]}], 0),
@@ -201,20 +202,29 @@ def test_desactivar_una_busqueda_la_excluye_del_run(cliente: TestClient, sesion)
     ],
     ids=["ninguna", "sin-jsearch", "una", "dos", "inactiva", "mezcla"],
 )
-def test_creditos_comprometidos_por_run(sesion, busquedas, esperado):
+def test_creditos_comprometidos_por_run(sesion, busquedas, busquedas_con_jsearch):
+    """El coste es búsquedas x páginas, no búsquedas a secas.
+
+    JSearch cobra un crédito por página de 10 resultados, así que subir las páginas
+    multiplica el gasto. Estos tests fijaban un crédito por búsqueda y se pusieron en
+    rojo al pasar a dos páginas: decían "una búsqueda cuesta uno" cuando la regla real
+    siempre fue "una página cuesta uno".
+    """
     for numero, campos in enumerate(busquedas):
         _crea(sesion, nombre=f"b{numero}", **campos)
 
-    assert routes_config.creditos_por_run(sesion) == esperado
+    paginas = get_settings().jsearch_paginas
+    assert routes_config.creditos_por_run(sesion) == busquedas_con_jsearch * paginas
 
 
 def test_creditos_al_mes_son_los_del_run_por_los_dias(sesion):
     _crea(sesion, nombre="con jsearch", fuentes=["jsearch"])
 
     coste = routes_config.coste_jsearch(sesion)
+    paginas = get_settings().jsearch_paginas
 
-    assert coste["por_run"] == 1
-    assert coste["al_mes"] == routes_config.RUNS_AL_MES
+    assert coste["por_run"] == paginas
+    assert coste["al_mes"] == routes_config.RUNS_AL_MES * paginas
     assert coste["limite"] > 0
 
 
