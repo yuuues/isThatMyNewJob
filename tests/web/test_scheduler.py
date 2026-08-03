@@ -168,14 +168,24 @@ def test_crear_scheduler_devuelve_el_planificador_parado(espia_run):
 # --------------------------------------------------------------------------
 
 
-def test_el_contenedor_arranca_la_web_en_el_puerto_8000():
+def test_el_contenedor_sirve_en_el_8000_y_el_puerto_del_host_es_configurable():
+    """El puerto de dentro del contenedor es fijo; el del host, no.
+
+    El 8000 es de los puertos mas disputados en una maquina de desarrollo: en la
+    maquina donde se probo esto ya lo ocupaba otro proyecto y `docker compose up`
+    fallaba con "port is already allocated". Publicarlo fijo convertia el primer
+    arranque en un fallo para cualquiera que tuviese algo ahi.
+    """
     dockerfile = DOCKERFILE.read_text(encoding="utf-8")
 
     assert "app.web.main:app" in dockerfile
-    assert "8000" in dockerfile
+    assert "--port 8000" in dockerfile
 
     servicio = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]["app"]
-    assert "8000:8000" in servicio["ports"]
+    publicado = servicio["ports"][0]
+    assert publicado.endswith(":8000"), "dentro del contenedor uvicorn escucha en el 8000"
+    assert "PUERTO_WEB" in publicado, "el puerto del host debe poder cambiarse sin tocar compose"
+    assert ":-" in publicado, "y debe traer un valor por defecto para funcionar sin configurar nada"
 
 
 def test_el_scheduler_se_enciende_con_el_comando_y_no_con_el_contenedor():
@@ -210,7 +220,7 @@ def test_el_readme_explica_arranque_uso_y_el_borrado_de_la_base_anterior():
 
     assert "docker compose up" in readme
     assert "app.cli cv" in readme
-    assert "http://localhost:8000" in readme
+    assert "http://localhost:8100" in readme
     assert "/preferences" in readme
     assert "data/app.db" in readme
     assert "create_all" in readme

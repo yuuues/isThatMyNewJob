@@ -26,7 +26,7 @@ docker compose run --rm app python -m app.cli cv ruta/al/cv.pdf
 docker compose up
 ```
 
-Y abrir <http://localhost:8000>.
+Y abrir <http://localhost:8100>.
 
 `init` crea `data/app.db` y carga preferencias y búsquedas desde el YAML. `cv` extrae el
 perfil del PDF (ver [El CV y el perfil](#el-cv-y-el-perfil)). Los dos pasos se pueden
@@ -54,7 +54,7 @@ cada seis horas: el aviso legal de Remotive pide como mucho unas cuatro peticion
 
 ## La web
 
-Cinco vistas, todas en <http://localhost:8000>:
+Cinco vistas, todas en <http://localhost:8100>:
 
 | Vista | Para qué |
 |---|---|
