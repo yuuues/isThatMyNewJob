@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     adzuna_app_id: str = ""
     adzuna_app_key: str = ""
+    jsearch_api_key: str = ""
 
     proveedor_clasificacion: Literal["gemini", "deepseek"] = "gemini"
     modelo_gemini: str = "gemini-2.5-flash"
