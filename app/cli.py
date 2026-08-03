@@ -62,7 +62,21 @@ def construye_fuentes(
     """
     fuentes = []
     for nombre in dict.fromkeys(nombres):
-        if nombre == "jsearch":
+        if nombre == "scrappa":
+            if not settings.scrappa_api_key or sesion is None:
+                continue
+            from app.presupuesto import PresupuestoMensual
+            from app.sources.scrappa import ScrappaSource
+
+            fuentes.append(
+                ScrappaSource(
+                    api_key=settings.scrappa_api_key,
+                    presupuesto=PresupuestoMensual(
+                        sesion, "scrappa", limite=settings.scrappa_limite_mensual
+                    ),
+                )
+            )
+        elif nombre == "jsearch":
             if not settings.jsearch_api_key or sesion is None:
                 continue
             from app.presupuesto import PresupuestoMensual

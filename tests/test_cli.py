@@ -161,3 +161,13 @@ def test_jsearch_necesita_clave_y_sesion(sesion):
     assert construye_fuentes(["jsearch"], con_clave, sesion=None) == []
     assert construye_fuentes(["jsearch"], Settings(jsearch_api_key=""), sesion=sesion) == []
     assert [f.nombre for f in construye_fuentes(["jsearch"], con_clave, sesion=sesion)] == ["jsearch"]
+
+
+def test_scrappa_necesita_clave_y_sesion(sesion):
+    """Como jsearch: sin sesión no hay dónde llevar el cupo mensual, y una fuente de
+    cupo duro sin contador se lo gasta entero."""
+    con_clave = Settings(scrappa_api_key="k")
+
+    assert construye_fuentes(["scrappa"], con_clave, sesion=None) == []
+    assert construye_fuentes(["scrappa"], Settings(scrappa_api_key=""), sesion=sesion) == []
+    assert [f.nombre for f in construye_fuentes(["scrappa"], con_clave, sesion=sesion)] == ["scrappa"]

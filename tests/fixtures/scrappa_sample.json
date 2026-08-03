@@ -1,0 +1,94 @@
+{
+  "__COMENTARIO__": "Respuesta REAL de scrappa.co/api/indeed/jobs (query='desarrollador php', location='Espana', country='ES'), grabada el 2026-08-03. Descripciones acortadas para el fixture. Medido sobre las 20 ofertas de la llamada: descripcion COMPLETA en 20/20 (min 856, mediana 3285, max 8914 caracteres en texto plano, ninguna acaba en puntos suspensivos); salary null en 20/20, asi que NO conocemos la forma de un salario no nulo y el conector debe tratarlo con cautela; location.is_remote es un booleano de verdad y attributes trae Remote / Hybrid work / Full-time junto a las tecnologias.",
+  "success": true,
+  "data": {
+    "jobs": [
+      {
+        "id": "c94ecc5e19f29d11",
+        "title": "Developer Fullstack (Swift-PHP) – M/H/NB",
+        "company": {
+          "name": "CEGID",
+          "logo": "https://d2q79iu7y748jz.cloudfront.net/s/_squarelogo/256x256/RECORTADO",
+          "website": "https://jobs.cegid.com"
+        },
+        "location": {
+          "city": null,
+          "state": "CT",
+          "country": "ES",
+          "country_name": "Spain",
+          "postal_code": null,
+          "formatted": "Manresa, Barcelona provincia",
+          "latitude": 41.7238,
+          "longitude": 1.8265,
+          "is_remote": false
+        },
+        "date_published": "2026-07-30 05:00:00",
+        "salary": null,
+        "attributes": ["Permanent", "iOS development", "Laravel", "Full-time", "Remote", "PHP"],
+        "apply_url": "https://jobs.cegid.com/es/annonce/4461395-developer-fullstack-swift-php-mhnb-8003-manresa",
+        "contact_person": null,
+        "description_html": "<p>En <b>CEGID</b> buscamos un desarrollador fullstack con experiencia en PHP y Swift para nuestro equipo de Manresa. Requisitos: 5 años con PHP 8 y Laravel, conocimientos de iOS. Ofrecemos contrato indefinido y modalidad remota parcial.</p>"
+      },
+      {
+        "id": "b92091947acc427e",
+        "title": "Desarrollador Full Stack",
+        "company": {
+          "name": "Reclut",
+          "logo": null,
+          "website": "https://jobs.reclut.es"
+        },
+        "location": {
+          "city": "Alicante",
+          "state": "VC",
+          "country": "ES",
+          "country_name": "Spain",
+          "postal_code": "03015",
+          "formatted": "03015 Alicante, Alicante provincia",
+          "latitude": 38.3466,
+          "longitude": -0.4819,
+          "is_remote": true
+        },
+        "date_published": "2026-07-29 05:00:00",
+        "salary": null,
+        "attributes": ["CI/CD", "Permanent", "Laravel", "Git", "Java", "PHP", "JavaScript"],
+        "apply_url": "https://jobs.reclut.es/jobs/8143165-desarrollador-full-stack",
+        "contact_person": null,
+        "description_html": "<p>Buscamos desarrollador full stack para trabajar en remoto. Stack: Laravel, JavaScript, Git y CI/CD. Contrato indefinido.</p>"
+      },
+      {
+        "id": "e82386faa27aa175",
+        "title": "Desarrollador/a Fullstack PHP/JS (Senior), Madrid",
+        "company": {
+          "name": "Eisi Soft",
+          "logo": null,
+          "website": null
+        },
+        "location": {
+          "city": "Madrid",
+          "state": "MD",
+          "country": "ES",
+          "country_name": "Spain",
+          "postal_code": null,
+          "formatted": "Madrid, Madrid provincia",
+          "latitude": 40.4165,
+          "longitude": -3.70256,
+          "is_remote": false
+        },
+        "date_published": "2026-07-22 05:00:00",
+        "salary": null,
+        "attributes": ["Permanent", "Hybrid work", "Microsoft SQL Server", "Databases"],
+        "apply_url": "https://www.tecnoempleo.com/desarrollador-fullstack-php-js-senior-eisi",
+        "contact_person": null,
+        "description_html": "<p>Seleccionamos desarrollador senior PHP y JavaScript para Madrid, en modelo hibrido. Se valorara experiencia con SQL Server.</p>"
+      }
+    ],
+    "pagination": {
+      "next_cursor": "RECORTADO",
+      "has_more": false
+    },
+    "metadata": {
+      "total_results": 20,
+      "timestamp": "2026-08-03T17:20:00.000000Z"
+    }
+  }
+}

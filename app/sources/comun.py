@@ -4,7 +4,23 @@ from app.dedup import normaliza
 from app.schemas import Modalidad
 
 _PALABRAS_REMOTO = ("remoto", "teletrabajo", "remote", "full remote", "en remoto")
-_PALABRAS_HIBRIDO = ("hibrido", "híbrido", "hybrid", "semipresencial")
+
+# "Remota parcial" y sus variantes son híbrido dicho con otras palabras, y en las
+# ofertas españolas aparecen constantemente. Sin ellas, una oferta que dice "modalidad
+# remota parcial" se clasificaba como totalmente remota y colaba el prefiltro de quien
+# sólo acepta remoto. Detectado sobre datos reales de Indeed vía Scrappa.
+_PALABRAS_HIBRIDO = (
+    "hibrido",
+    "híbrido",
+    "hybrid",
+    "semipresencial",
+    "remoto parcial",
+    "remota parcial",
+    "parcialmente remoto",
+    "parcialmente remota",
+    "teletrabajo parcial",
+    "remoto hibrido",
+)
 
 
 # Por debajo de esto, una cifra no puede ser un salario anual en el mercado español:

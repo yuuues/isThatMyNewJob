@@ -37,3 +37,17 @@ def test_el_hibrido_gana_al_remoto():
     assert detecta_modalidad("Modelo híbrido con dos días de teletrabajo") == "hibrido"
     assert detecta_modalidad("Puesto totalmente en remoto") == "remoto"
     assert detecta_modalidad("Desarrollador backend para el equipo") == "desconocida"
+
+
+def test_remota_parcial_es_hibrido_no_remoto():
+    """En las ofertas españolas "remota parcial" es la forma habitual de decir híbrido.
+    Sin reconocerlo, una oferta presencial tres días colaba el prefiltro de quien sólo
+    acepta remoto, que es peor que descartarla: le hace perder el tiempo."""
+    assert detecta_modalidad("Ofrecemos modalidad remota parcial") == "hibrido"
+    assert detecta_modalidad("Puesto parcialmente remoto en Madrid") == "hibrido"
+    assert detecta_modalidad("Teletrabajo parcial, dos días en oficina") == "hibrido"
+
+
+def test_el_remoto_total_sigue_siendo_remoto():
+    assert detecta_modalidad("Puesto 100% en remoto") == "remoto"
+    assert detecta_modalidad("Full remote position") == "remoto"

@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     jsearch_limite_mensual: int = 180
     jsearch_paginas: int = 2
 
+    # Scrappa sirve ofertas de Indeed. Su plan gratuito son 500 créditos/mes, pero a
+    # un crédito por LLAMADA y hasta 20 ofertas por llamada, no un crédito por oferta
+    # como JobsPipe. Es el mejor ratio del proyecto: ~10.000 ofertas al mes gratis.
+    scrappa_api_key: str = ""
+    scrappa_limite_mensual: int = 450
+
     ruta_bd: str = "data/app.db"
     hora_run_diario: str = "07:00"
     max_clasificaciones_por_run: int = 200
