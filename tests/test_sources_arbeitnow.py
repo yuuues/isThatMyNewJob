@@ -4,10 +4,20 @@ from pathlib import Path
 import httpx
 import respx
 
+from app.limitador import sin_espera
 from app.schemas import SearchQuery
 from app.sources.arbeitnow import URL_API, ArbeitnowSource
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "arbeitnow_sample.json").read_text())
+
+
+class LimitadorEspia:
+    def __init__(self) -> None:
+        self.turnos: list[str] = []
+
+    def espera_turno(self, url: str) -> float:
+        self.turnos.append(url)
+        return 0.0
 
 
 @respx.mock
@@ -80,6 +90,46 @@ def test_sigue_la_paginacion_hasta_agotar_el_maximo():
     respx.get(URL_API, params={"page": "1"}).mock(return_value=httpx.Response(200, json=primera))
     respx.get(URL_API, params={"page": "2"}).mock(return_value=httpx.Response(200, json=pagina_2))
 
-    ofertas = ArbeitnowSource(max_paginas=2).search(SearchQuery(nombre="php", texto="php"))
+    fuente = ArbeitnowSource(max_paginas=2, limitador=sin_espera())
+    ofertas = fuente.search(SearchQuery(nombre="php", texto="php"))
 
     assert "otro-php-303586" in {o.external_id for o in ofertas}
+
+
+def test_declara_que_no_filtra_en_servidor():
+    assert ArbeitnowSource().filtra_en_servidor is False
+
+
+@respx.mock
+def test_varias_busquedas_se_resuelven_con_una_sola_descarga():
+    ruta = respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+    queries = [
+        SearchQuery(nombre="php", texto="php"),
+        SearchQuery(nombre="passau", texto="passau"),
+    ]
+
+    ofertas = ArbeitnowSource(limitador=sin_espera()).busca_varias(queries)
+
+    assert ruta.call_count == 1
+    assert len({o.external_id for o in ofertas}) == len(ofertas)
+    assert "senior-php-developer-remote-303585" in {o.external_id for o in ofertas}
+
+
+@respx.mock
+def test_cada_busqueda_conserva_su_propio_solo_remoto():
+    respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+    queries = [SearchQuery(nombre="remotas", texto="", solo_remoto=True)]
+
+    ofertas = ArbeitnowSource(limitador=sin_espera()).busca_varias(queries)
+
+    assert [o.modalidad for o in ofertas] == ["remoto"]
+
+
+@respx.mock
+def test_pide_turno_al_limitador_en_cada_pagina():
+    respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+    espia = LimitadorEspia()
+
+    ArbeitnowSource(limitador=espia).search(SearchQuery(nombre="php", texto="php"))
+
+    assert espia.turnos == [URL_API]

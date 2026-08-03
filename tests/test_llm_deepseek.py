@@ -3,6 +3,7 @@ import pytest
 import respx
 from pydantic import BaseModel
 
+from app.llm.base import CuotaAgotadaError
 from app.llm.deepseek import URL_API, DeepSeekProvider
 
 
@@ -63,9 +64,31 @@ def test_un_json_invalido_lanza_error_de_validacion():
 
 @respx.mock
 def test_un_error_http_se_propaga():
-    respx.post(URL_API).mock(return_value=httpx.Response(429, json={"error": "rate limit"}))
+    respx.post(URL_API).mock(return_value=httpx.Response(500, json={"error": "boom"}))
 
     with pytest.raises(httpx.HTTPStatusError):
+        DeepSeekProvider(api_key="k").complete_json(
+            system="s", user="u", modelo_salida=Salida
+        )
+
+
+@respx.mock
+def test_un_429_se_traduce_a_la_excepcion_de_cuota_del_dominio():
+    respx.post(URL_API).mock(return_value=httpx.Response(429, json={"error": "rate limit"}))
+
+    with pytest.raises(CuotaAgotadaError):
+        DeepSeekProvider(api_key="k").complete_json(
+            system="s", user="u", modelo_salida=Salida
+        )
+
+
+@respx.mock
+def test_un_402_sin_saldo_tambien_es_cuota_agotada():
+    respx.post(URL_API).mock(
+        return_value=httpx.Response(402, json={"error": "Insufficient Balance"})
+    )
+
+    with pytest.raises(CuotaAgotadaError):
         DeepSeekProvider(api_key="k").complete_json(
             system="s", user="u", modelo_salida=Salida
         )

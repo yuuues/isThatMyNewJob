@@ -56,12 +56,31 @@ def _bloque_ejemplos(ejemplos: list[EjemploDecision]) -> str:
     )
 
 
+def _importe(valor: float) -> str:
+    """Sin decimales cuando no los hay: el modelo no gana nada leyendo '50000.0'."""
+    return f"{valor:.0f}" if float(valor).is_integer() else f"{valor:g}"
+
+
+def _formatea_salario(job: RawJob) -> str:
+    """Un extremo ausente se nombra ausente, nunca se presenta como valor.
+
+    La regla 1 del prompt de sistema prohíbe al modelo inventar datos que no
+    están; enviarle 'Salario: 50000.0 - None' es pedirle justo lo contrario.
+    """
+    if job.salario_texto:
+        return job.salario_texto
+    if job.salario_min is not None and job.salario_max is not None:
+        return f"{_importe(job.salario_min)} - {_importe(job.salario_max)}"
+    if job.salario_min is not None:
+        return f"desde {_importe(job.salario_min)} (máximo no publicado)"
+    if job.salario_max is not None:
+        return f"hasta {_importe(job.salario_max)} (mínimo no publicado)"
+    return "no publicado"
+
+
 def _bloque_oferta(job: RawJob) -> str:
     descripcion = job.descripcion[:MAX_CARACTERES_DESCRIPCION]
-    salario = (
-        job.salario_texto
-        or (f"{job.salario_min} - {job.salario_max}" if job.salario_min or job.salario_max else "no publicado")
-    )
+    salario = _formatea_salario(job)
     return (
         f"Título: {job.titulo}\n"
         f"Empresa: {job.empresa}\n"

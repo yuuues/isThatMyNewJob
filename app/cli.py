@@ -9,10 +9,16 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.db import crear_engine, crear_sesion, crear_tablas
 from app.llm.factory import crear_provider
-from app.models import BusquedaGuardada, Perfil, PreferenciasRow
+from app.models import BusquedaGuardada, PreferenciasRow
 from app.pipeline import ejecuta_run
-from app.profile import crear_cliente, extrae_perfil
-from app.schemas import SearchQuery
+from app.profile import (
+    PDF_NUEVO_CON_EDICION_PREVIA,
+    SIN_CAMBIOS,
+    crear_cliente,
+    extrae_perfil,
+    sincroniza_perfil,
+)
+from app.schemas import PerfilCandidato, SearchQuery
 
 
 def carga_semilla(sesion: Session, ruta: Path) -> None:
@@ -103,14 +109,31 @@ def comando_cv(args) -> int:
     crear_tablas(engine)
 
     pdf = Path(args.pdf).read_bytes()
-    cliente = crear_cliente(settings.gemini_api_key)
-    perfil = extrae_perfil(pdf, cliente=cliente, modelo=settings.modelo_gemini)
+
+    def extrae() -> PerfilCandidato:
+        # Perezoso a propósito: si el PDF no ha cambiado no se llama al modelo, y
+        # entonces tampoco hace falta GEMINI_API_KEY.
+        cliente = crear_cliente(settings.gemini_api_key)
+        return extrae_perfil(pdf, cliente=cliente, modelo=settings.modelo_gemini)
 
     with crear_sesion(engine) as sesion:
-        sesion.add(Perfil(ruta_pdf=str(args.pdf), datos=perfil.model_dump()))
-        sesion.commit()
+        resultado = sincroniza_perfil(sesion, pdf, ruta=str(args.pdf), extractor=extrae)
 
-    print(f"Perfil extraído: {perfil.anios_experiencia} años, {len(perfil.skills)} skills")
+    perfil = resultado.perfil
+    resumen = f"{perfil.anios_experiencia} años, {len(perfil.skills)} skills"
+
+    if resultado.motivo == SIN_CAMBIOS:
+        print(f"El CV no ha cambiado: se conserva el perfil guardado ({resumen})")
+        return 0
+
+    if resultado.motivo == PDF_NUEVO_CON_EDICION_PREVIA:
+        print(
+            "Aviso: el perfil anterior tenía correcciones manuales. El CV es distinto, "
+            "así que se ha vuelto a extraer y las correcciones manuales no se arrastran; "
+            "el perfil anterior se conserva en el histórico. Revísalo en /profile."
+        )
+
+    print(f"Perfil extraído: {resumen}")
     return 0
 
 

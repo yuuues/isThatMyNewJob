@@ -5,9 +5,14 @@ from html import unescape
 import httpx
 
 from app.dedup import normaliza
+from app.limitador import LimitadorPorHost
 from app.schemas import RawJob, SearchQuery
+from app.sources.base import FuenteFiltradaEnLocal
 
 URL_API = "https://remotive.com/api/remote-jobs"
+
+# Su aviso legal pide ~4 peticiones al día: se separan bien las que haya.
+INTERVALO_SEGUNDOS = 5.0
 _TAGS_HTML = re.compile(r"<[^>]+>")
 
 
@@ -15,26 +20,37 @@ def html_a_texto(html: str) -> str:
     return re.sub(r"\s+", " ", unescape(_TAGS_HTML.sub(" ", html or ""))).strip()
 
 
-class RemotiveSource:
+class RemotiveSource(FuenteFiltradaEnLocal):
     """Feed de ofertas remotas.
 
     La API ignora `search` y `limit`: devuelve siempre el feed reciente completo.
-    Por eso el filtrado por texto se hace aquí. Su aviso legal pide no más de unas
-    4 peticiones al día, así que no debe llamarse en bucle.
+    Por eso el filtrado por texto se hace aquí y `filtra_en_servidor` es False: la
+    ingesta descarga el feed una vez por run y lo filtra contra todas las búsquedas.
     """
 
     nombre = "remotive"
 
-    def __init__(self, cliente: httpx.Client | None = None, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        cliente: httpx.Client | None = None,
+        timeout: float = 30.0,
+        limitador: LimitadorPorHost | None = None,
+    ) -> None:
         self._cliente = cliente
         self._timeout = timeout
+        self._limitador = limitador or LimitadorPorHost(
+            intervalo_por_defecto=INTERVALO_SEGUNDOS
+        )
 
-    def search(self, query: SearchQuery) -> list[RawJob]:
+    def _descarga_feed(self) -> list[RawJob]:
         datos = self._descargar()
-        ofertas = [self._normaliza(j) for j in datos.get("jobs", [])]
+        return [self._normaliza(j) for j in datos.get("jobs", [])]
+
+    def _aplica_query(self, ofertas: list[RawJob], query: SearchQuery) -> list[RawJob]:
         return self._filtra(ofertas, query)[: query.max_resultados]
 
     def _descargar(self) -> dict:
+        self._limitador.espera_turno(URL_API)
         if self._cliente is not None:
             respuesta = self._cliente.get(URL_API, timeout=self._timeout)
         else:

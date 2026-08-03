@@ -32,6 +32,27 @@ def test_el_provider_fake_puede_simular_un_fallo():
         provider.complete_json(system="s", user="u", modelo_salida=Salida)
 
 
+def test_el_provider_fake_puede_fallar_n_veces_y_luego_tener_exito():
+    provider = FakeProvider([Salida(valor="ok")], error=RuntimeError("timeout"), fallos=2)
+
+    for _ in range(2):
+        with pytest.raises(RuntimeError, match="timeout"):
+            provider.complete_json(system="s", user="u", modelo_salida=Salida)
+
+    resultado = provider.complete_json(system="s", user="u", modelo_salida=Salida)
+
+    assert resultado.valor == "ok"
+    assert len(provider.llamadas) == 3
+
+
+def test_sin_fallos_declarados_el_error_se_lanza_en_todas_las_llamadas():
+    provider = FakeProvider([Salida(valor="ok")], error=RuntimeError("timeout"))
+
+    for _ in range(3):
+        with pytest.raises(RuntimeError, match="timeout"):
+            provider.complete_json(system="s", user="u", modelo_salida=Salida)
+
+
 def test_el_provider_fake_cicla_las_respuestas_si_se_agotan():
     provider = FakeProvider([Salida(valor="a"), Salida(valor="b")])
 

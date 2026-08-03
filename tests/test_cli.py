@@ -1,9 +1,12 @@
+import pytest
 from sqlalchemy import select
 
+from app import cli
 from app.cli import carga_semilla, construye_fuentes
 from app.config import Settings
-from app.models import BusquedaGuardada, PreferenciasRow
-from app.schemas import Preferencias
+from app.db import crear_engine, crear_sesion
+from app.models import BusquedaGuardada, Perfil, PreferenciasRow
+from app.schemas import PerfilCandidato, Preferencias
 
 SEMILLA = """
 preferencias:
@@ -57,3 +60,94 @@ def test_adzuna_se_construye_cuando_hay_credenciales():
     fuentes = construye_fuentes(["adzuna"], settings)
 
     assert [f.nombre for f in fuentes] == ["adzuna"]
+
+
+class ArgsCv:
+    def __init__(self, pdf):
+        self.pdf = str(pdf)
+
+
+@pytest.fixture
+def cv(monkeypatch, tmp_path):
+    """Prepara `comando_cv` sobre una BD temporal y con Gemini falseado."""
+    ruta_bd = tmp_path / "app.db"
+    monkeypatch.setattr(
+        cli, "get_settings", lambda: Settings(ruta_bd=str(ruta_bd), gemini_api_key="clave")
+    )
+
+    class Gemini:
+        llamadas = 0
+        clientes = 0
+
+    def crea_cliente(api_key):
+        Gemini.clientes += 1
+        return "cliente"
+
+    monkeypatch.setattr(cli, "crear_cliente", crea_cliente)
+
+    def extrae(pdf, *, cliente, modelo):
+        Gemini.llamadas += 1
+        return PerfilCandidato(anios_experiencia=8, resumen="Backend")
+
+    monkeypatch.setattr(cli, "extrae_perfil", extrae)
+    Gemini.ruta_bd = ruta_bd
+    return Gemini
+
+
+def _sesion_de(ruta_bd):
+    return crear_sesion(crear_engine(str(ruta_bd)))
+
+
+def test_resubir_el_mismo_cv_no_vuelve_a_llamar_a_gemini(cv, tmp_path, capsys):
+    pdf = tmp_path / "cv.pdf"
+    pdf.write_bytes(b"%PDF-1.4 cv")
+
+    assert cli.comando_cv(ArgsCv(pdf)) == 0
+    assert cli.comando_cv(ArgsCv(pdf)) == 0
+
+    assert cv.llamadas == 1
+    assert "no ha cambiado" in capsys.readouterr().out
+    with _sesion_de(cv.ruta_bd) as sesion:
+        assert len(sesion.scalars(select(Perfil)).all()) == 1
+
+
+def test_subir_un_cv_distinto_vuelve_a_extraer(cv, tmp_path):
+    pdf = tmp_path / "cv.pdf"
+    pdf.write_bytes(b"%PDF-1.4 cv")
+    cli.comando_cv(ArgsCv(pdf))
+    pdf.write_bytes(b"%PDF-1.4 cv actualizado")
+
+    cli.comando_cv(ArgsCv(pdf))
+
+    assert cv.llamadas == 2
+    with _sesion_de(cv.ruta_bd) as sesion:
+        assert len(sesion.scalars(select(Perfil)).all()) == 2
+
+
+def test_un_cv_distinto_avisa_de_que_la_edicion_manual_no_se_arrastra(cv, tmp_path, capsys):
+    pdf = tmp_path / "cv.pdf"
+    pdf.write_bytes(b"%PDF-1.4 cv")
+    cli.comando_cv(ArgsCv(pdf))
+    with _sesion_de(cv.ruta_bd) as sesion:
+        fila = sesion.scalar(select(Perfil))
+        fila.editado_a_mano = True
+        sesion.commit()
+    capsys.readouterr()
+
+    pdf.write_bytes(b"%PDF-1.4 cv actualizado")
+    cli.comando_cv(ArgsCv(pdf))
+
+    salida = capsys.readouterr().out
+    assert "Aviso" in salida
+    assert "correcciones manuales" in salida
+
+
+def test_resubir_el_mismo_cv_no_necesita_credenciales_de_gemini(cv, tmp_path, monkeypatch):
+    """Si no hay que extraer, no se crea cliente: sin PDF nuevo no hace falta la API key."""
+    pdf = tmp_path / "cv.pdf"
+    pdf.write_bytes(b"%PDF-1.4 cv")
+    cli.comando_cv(ArgsCv(pdf))
+    clientes_tras_la_primera = cv.clientes
+
+    assert cli.comando_cv(ArgsCv(pdf)) == 0
+    assert cv.clientes == clientes_tras_la_primera

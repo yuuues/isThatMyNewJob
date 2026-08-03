@@ -17,6 +17,8 @@ class Perfil(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     ruta_pdf: Mapped[str | None] = mapped_column(String, default=None)
+    # Identidad del PDF por contenido: decide si hay que re-extraer o basta con lo guardado.
+    hash_pdf: Mapped[str | None] = mapped_column(String, default=None)
     datos: Mapped[dict] = mapped_column(JSON, default=dict)
     editado_a_mano: Mapped[bool] = mapped_column(default=False)
     actualizado_en: Mapped[datetime] = mapped_column(DateTime, default=ahora)

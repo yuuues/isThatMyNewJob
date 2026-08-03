@@ -5,14 +5,25 @@ import httpx
 import pytest
 import respx
 
+from app.limitador import sin_espera
 from app.schemas import SearchQuery
 from app.sources.adzuna import AdzunaSource, detecta_modalidad, url_api
 
 FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "adzuna_sample.json").read_text())
 
 
-def fuente() -> AdzunaSource:
-    return AdzunaSource(app_id="id", app_key="key")
+class LimitadorEspia:
+    def __init__(self) -> None:
+        self.turnos: list[str] = []
+
+    def espera_turno(self, url: str) -> float:
+        self.turnos.append(url)
+        return 0.0
+
+
+def fuente(**kwargs) -> AdzunaSource:
+    kwargs.setdefault("limitador", sin_espera())
+    return AdzunaSource(app_id="id", app_key="key", **kwargs)
 
 
 @respx.mock
@@ -73,3 +84,37 @@ def test_una_respuesta_no_json_da_un_error_claro():
 def test_sin_credenciales_falla_al_construir():
     with pytest.raises(ValueError, match="credenciales"):
         AdzunaSource(app_id="", app_key="")
+
+
+@respx.mock
+def test_un_429_con_cuerpo_json_lanza_excepcion():
+    respx.get(url_api("es")).mock(
+        return_value=httpx.Response(429, json={"exception": "AUTH_FAIL", "display": "limit"})
+    )
+
+    with pytest.raises(RuntimeError, match="429"):
+        fuente().search(SearchQuery(nombre="php", texto="php"))
+
+
+@respx.mock
+def test_un_401_con_cuerpo_json_lanza_excepcion():
+    respx.get(url_api("es")).mock(
+        return_value=httpx.Response(401, json={"exception": "AUTH_FAIL"})
+    )
+
+    with pytest.raises(RuntimeError, match="401"):
+        fuente().search(SearchQuery(nombre="php", texto="php"))
+
+
+@respx.mock
+def test_pide_turno_al_limitador_antes_de_cada_peticion():
+    respx.get(url_api("es")).mock(return_value=httpx.Response(200, json=FIXTURE))
+    espia = LimitadorEspia()
+
+    fuente(limitador=espia).search(SearchQuery(nombre="php", texto="php"))
+
+    assert espia.turnos == [url_api("es")]
+
+
+def test_filtra_en_servidor():
+    assert fuente().filtra_en_servidor is True

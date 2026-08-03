@@ -3,7 +3,9 @@ from datetime import datetime
 import httpx
 
 from app.dedup import normaliza
+from app.limitador import LimitadorPorHost
 from app.schemas import Modalidad, RawJob, SearchQuery
+from app.sources.base import FuenteConFiltroEnServidor
 
 _PALABRAS_REMOTO = ("remoto", "teletrabajo", "remote", "full remote", "en remoto")
 _PALABRAS_HIBRIDO = ("hibrido", "híbrido", "hybrid", "semipresencial")
@@ -23,17 +25,25 @@ def detecta_modalidad(texto: str) -> Modalidad:
     return "desconocida"
 
 
-class AdzunaSource:
-    """Agregador con cobertura de España. Filtra en servidor vía `what` y `where`."""
+class AdzunaSource(FuenteConFiltroEnServidor):
+    """Agregador con cobertura de España. Filtra en servidor vía `what` y `where`,
+    así que necesita una petición por búsqueda guardada."""
 
     nombre = "adzuna"
 
-    def __init__(self, app_id: str, app_key: str, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        app_id: str,
+        app_key: str,
+        timeout: float = 30.0,
+        limitador: LimitadorPorHost | None = None,
+    ) -> None:
         if not app_id or not app_key:
             raise ValueError("Adzuna necesita credenciales: ADZUNA_APP_ID y ADZUNA_APP_KEY")
         self.app_id = app_id
         self.app_key = app_key
         self._timeout = timeout
+        self._limitador = limitador or LimitadorPorHost()
 
     def search(self, query: SearchQuery) -> list[RawJob]:
         params = {
@@ -46,14 +56,31 @@ class AdzunaSource:
         if query.ubicacion:
             params["where"] = query.ubicacion
 
-        respuesta = httpx.get(url_api(query.pais), params=params, timeout=self._timeout)
+        url = url_api(query.pais)
+        self._limitador.espera_turno(url)
+        respuesta = httpx.get(url, params=params, timeout=self._timeout)
         datos = self._json_o_error(respuesta)
         return [self._normaliza(r) for r in datos.get("results", [])]
 
     @staticmethod
     def _json_o_error(respuesta: httpx.Response) -> dict:
-        """Adzuna devuelve HTML en los errores, no JSON. Sin esto el fallo sería un
-        JSONDecodeError críptico en vez del código de estado real."""
+        """Convierte cualquier fallo de Adzuna en un error legible.
+
+        El código de estado se mira primero: un 401 o un 429 traen cuerpo JSON válido
+        y sin `raise_for_status()` se colaban como respuesta buena, devolviendo cero
+        ofertas en silencio. Los errores con cuerpo HTML se cubren después, para que
+        el fallo no aparezca como un JSONDecodeError críptico.
+
+        Decisión: se envuelve en RuntimeError en vez de propagar `HTTPStatusError`
+        porque el cuerpo de Adzuna lleva el motivo real y el mensaje lo conserva.
+        """
+        try:
+            respuesta.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(
+                f"Adzuna respondió {respuesta.status_code}: {respuesta.text[:200]}"
+            ) from e
+
         try:
             return respuesta.json()
         except ValueError:

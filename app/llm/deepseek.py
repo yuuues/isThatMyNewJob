@@ -3,7 +3,13 @@ import json
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from app.llm.base import CuotaAgotadaError
+
 URL_API = "https://api.deepseek.com/chat/completions"
+
+# 429: rate limit. 402: saldo agotado — DeepSeek es de prepago, así que quedarse sin
+# saldo es exactamente "cuota agotada" y reintentar no lo va a arreglar.
+CODIGOS_CUOTA = (402, 429)
 
 
 class DeepSeekProvider:
@@ -40,6 +46,11 @@ class DeepSeekProvider:
             },
             timeout=self._timeout,
         )
+        if respuesta.status_code in CODIGOS_CUOTA:
+            raise CuotaAgotadaError(
+                f"DeepSeek rechaza la petición por cuota (HTTP {respuesta.status_code}): "
+                f"{respuesta.text[:200]}"
+            )
         respuesta.raise_for_status()
 
         contenido = respuesta.json()["choices"][0]["message"]["content"]

@@ -58,6 +58,127 @@ def test_descarta_por_tecnologia_vetada():
     assert "cobol" in resultado.motivo
 
 
+def test_un_veto_no_descarta_una_palabra_que_solo_lo_contiene():
+    prefs = Preferencias(tecnologias_veto=["java"])
+    oferta = job(
+        titulo="Senior JavaScript Developer",
+        descripcion="We are looking for a JavaScript developer to join the team and build our platform.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False
+
+
+def test_un_veto_descarta_cuando_aparece_como_palabra_completa():
+    prefs = Preferencias(tecnologias_veto=["java"])
+    oferta = job(
+        titulo="Desarrollador Java senior",
+        descripcion="Buscamos un desarrollador Java senior para el equipo de la empresa en Madrid",
+    )
+
+    resultado = aplica_prefiltro(oferta, prefs)
+
+    assert resultado.descartada is True
+    assert "java" in resultado.motivo
+
+
+def test_un_veto_corto_no_casa_dentro_de_otra_palabra():
+    prefs = Preferencias(tecnologias_veto=["go"])
+    oferta = job(
+        titulo="Backend Developer",
+        descripcion="We are looking for a developer with Django and Python to join our team.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False
+
+
+def test_un_veto_de_varias_palabras_sigue_descartando():
+    prefs = Preferencias(sectores_veto=["business intelligence"])
+    oferta = job(
+        titulo="Consultor Business Intelligence",
+        descripcion="Buscamos un consultor para el equipo de reporting de la empresa en Madrid",
+    )
+
+    resultado = aplica_prefiltro(oferta, prefs)
+
+    assert resultado.descartada is True
+    assert "business intelligence" in resultado.motivo
+
+
+def test_un_veto_de_varias_palabras_casa_aunque_las_separe_un_salto_de_linea():
+    prefs = Preferencias(sectores_veto=["business intelligence"])
+    oferta = job(
+        titulo="Consultor",
+        descripcion="Buscamos un consultor de business\nintelligence para el equipo de la empresa",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is True
+
+
+def test_un_veto_de_c_no_descarta_una_oferta_de_cpp():
+    # Decisión deliberada: '+' y '#' cuentan como parte del token, así que 'c' no
+    # casa dentro de 'C++' ni de 'C#'. Vetar C++ requiere escribir 'c++'.
+    prefs = Preferencias(tecnologias_veto=["c"])
+    oferta = job(
+        titulo="C++ Developer",
+        descripcion="We are looking for a C++ developer to join the team and build our platform.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False
+
+
+def test_un_veto_de_cpp_si_descarta_una_oferta_de_cpp():
+    prefs = Preferencias(tecnologias_veto=["c++"])
+    oferta = job(
+        titulo="C++ Developer",
+        descripcion="We are looking for a C++ developer to join the team and build our platform.",
+    )
+
+    resultado = aplica_prefiltro(oferta, prefs)
+
+    assert resultado.descartada is True
+    assert "c++" in resultado.motivo
+
+
+def test_un_veto_de_c_descarta_cuando_c_aparece_suelta():
+    prefs = Preferencias(tecnologias_veto=["c"])
+    oferta = job(
+        titulo="Embedded Developer",
+        descripcion="We are looking for a developer with C and assembly to join our team.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is True
+
+
+def test_un_veto_de_csharp_no_lo_confunde_con_c():
+    prefs = Preferencias(tecnologias_veto=["c#"])
+    oferta = job(
+        titulo="Embedded Developer",
+        descripcion="We are looking for a developer with C and assembly to join our team.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False
+
+
+def test_un_veto_con_punto_conserva_el_punto():
+    prefs = Preferencias(tecnologias_veto=["node.js"])
+    oferta = job(
+        titulo="Node.js Backend Developer",
+        descripcion="We are looking for a backend developer to join the team and build our platform.",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is True
+
+
+def test_el_veto_ignora_mayusculas_y_acentos():
+    prefs = Preferencias(sectores_veto=["Automoción"])
+    oferta = job(
+        titulo="Ingeniero de software",
+        descripcion="Buscamos un ingeniero para el sector de la automocion en la empresa de Madrid",
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is True
+
+
 def test_descarta_por_modalidad_no_aceptada():
     prefs = Preferencias(modalidades=["remoto"])
     oferta = job(modalidad="presencial")
