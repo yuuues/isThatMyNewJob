@@ -77,6 +77,11 @@ Tres cosas que no se ven a simple vista y conviene saber:
   válidas en silencio y sin gastar llamada al modelo; ésa es la vista donde se ve y desde
   donde se devuelve una oferta a la cola.
 
+El selector de la barra de navegación cambia entre tema claro y oscuro. De serie va en
+`Tema: automático`, que es seguir al sistema operativo; elegir claro u oscuro lo fija para
+ese navegador y se recuerda en `localStorage`. No se guarda en la base de datos: es una
+preferencia del dispositivo, no del candidato.
+
 ## Preferencias
 
 Se configuran en `/preferences` o, la primera vez, con `init --semilla seed.yaml`. Dos

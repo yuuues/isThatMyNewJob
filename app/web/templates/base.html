@@ -21,6 +21,24 @@
     <link rel="stylesheet" href="/static/pico.min.css" />
     <link rel="stylesheet" href="/static/estilo.css" />
     <script src="/static/htmx.min.js" defer></script>
+    {# Restaura el tema elegido ANTES de que el navegador pinte nada. Va aquí, sin
+       `defer`, a propósito: con `defer` el documento se pintaría con el tema del
+       sistema y cambiaría después, con un parpadeo visible en cada navegación.
+
+       Sin valor guardado no se toca el atributo, y entonces manda `prefers-color-scheme`
+       igual que antes de que existiera este selector. #}
+    <script>
+      (function () {
+        try {
+          var tema = localStorage.getItem("tema");
+          if (tema === "light" || tema === "dark") {
+            document.documentElement.dataset.theme = tema;
+          }
+        } catch (e) {
+          /* Almacenamiento bloqueado (modo privado): se sigue con el tema del sistema. */
+        }
+      })();
+    </script>
   </head>
   <body>
     {# Pico maqueta la navegación a partir de <nav> con listas: la primera <ul> queda
@@ -36,6 +54,16 @@
           <li><a href="/preferences">Preferencias</a></li>
           <li><a href="/searches">Búsquedas</a></li>
           <li><a href="/runs">Ejecuciones</a></li>
+          {# Cada opción se nombra a sí misma ("Tema: …") porque en una barra de una
+             sola línea no cabe un <label> visible: cerrado, el selector tiene que
+             decir qué es y no sólo cómo está. #}
+          <li>
+            <select id="tema" aria-label="Tema">
+              <option value="auto">Tema: automático</option>
+              <option value="light">Tema: claro</option>
+              <option value="dark">Tema: oscuro</option>
+            </select>
+          </li>
         </ul>
       </nav>
       {# Hueco para lo que cada vista quiera tener siempre visible: los contadores de
@@ -53,5 +81,48 @@
     <footer class="container">
       <small class="tenue">Herramienta local. Los datos no salen de esta máquina.</small>
     </footer>
+
+    {# Segunda mitad del selector: sincroniza el control con lo guardado y atiende los
+       cambios. No puede ir junto al script del <head> porque allí el <select> todavía
+       no existe.
+
+       HTMX no lo estropea: sus reemplazos sólo tocan `#contenido`, así que ni la
+       navegación ni el atributo del <html> se vuelven a pintar. #}
+    <script>
+      (function () {
+        var selector = document.getElementById("tema");
+        var raiz = document.documentElement;
+
+        function guardado() {
+          try {
+            return localStorage.getItem("tema");
+          } catch (e) {
+            return null;
+          }
+        }
+
+        var actual = guardado();
+        selector.value = actual === "light" || actual === "dark" ? actual : "auto";
+
+        selector.addEventListener("change", function () {
+          var elegido = selector.value;
+          try {
+            if (elegido === "auto") {
+              localStorage.removeItem("tema");
+            } else {
+              localStorage.setItem("tema", elegido);
+            }
+          } catch (e) {
+            /* Sin almacenamiento el cambio vale para esta página y no se recuerda. */
+          }
+          // Quitar el atributo devuelve el mando a `prefers-color-scheme`.
+          if (elegido === "auto") {
+            delete raiz.dataset.theme;
+          } else {
+            raiz.dataset.theme = elegido;
+          }
+        });
+      })();
+    </script>
   </body>
 </html>
