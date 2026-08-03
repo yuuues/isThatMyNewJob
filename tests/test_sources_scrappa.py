@@ -205,3 +205,26 @@ def test_una_respuesta_sin_exito_no_se_procesa():
 def test_sin_api_key_falla_al_construir():
     with pytest.raises(ValueError, match="SCRAPPA_API_KEY"):
         ScrappaSource(api_key="")
+
+
+@respx.mock
+def test_pide_el_maximo_de_resultados_que_permite_un_credito():
+    """`limit` llega a 100 y el precio no cambia: es un crédito por llamada. Pedir los
+    20 por defecto desperdiciaba cuatro quintas partes de cada crédito."""
+    ruta = respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+
+    fuente(resultados=100).search(SearchQuery(nombre="x", texto="php", pais="es"))
+
+    peticion = ruta.calls.last.request
+    assert peticion.url.params["limit"] == "100"
+    assert peticion.url.params["hl"] == "es"
+    assert peticion.url.params["sort"] == "relevance"
+
+
+@respx.mock
+def test_el_limite_se_acota_a_lo_que_admite_la_api():
+    ruta = respx.get(URL_API).mock(return_value=httpx.Response(200, json=FIXTURE))
+
+    fuente(resultados=500).search(SearchQuery(nombre="x", texto="php"))
+
+    assert ruta.calls.last.request.url.params["limit"] == "100"

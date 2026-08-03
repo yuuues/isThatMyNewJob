@@ -71,6 +71,7 @@ def construye_fuentes(
             fuentes.append(
                 ScrappaSource(
                     api_key=settings.scrappa_api_key,
+                    resultados=settings.scrappa_resultados,
                     presupuesto=PresupuestoMensual(
                         sesion, "scrappa", limite=settings.scrappa_limite_mensual
                     ),

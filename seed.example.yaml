@@ -24,14 +24,17 @@ preferencias:
 #   adzuna     Gratis y con buena cobertura de España, pero corta las descripciones
 #              a 500 caracteres: sirve para descubrir, no para clasificar a fondo.
 #   remotive   Sólo remoto internacional. Gratis, sin clave, una descarga por run.
-#   arbeitnow  Remoto europeo, mayoritariamente alemán. Gratis, sin clave.
+#   arbeitnow  Remoto europeo, mayoritariamente alemán. Gratis, sin clave, pero
+#              MEDIDO EN PRODUCCIÓN: 0 aplicar_ya de 88 clasificaciones y un 94% de
+#              descartes. Gasta llamadas al modelo sin aportar nada a un perfil
+#              español. Queda disponible, pero no se recomienda activarla.
 
 busquedas:
   - nombre: PHP senior remoto
     texto: php senior
     pais: es
     solo_remoto: true
-    fuentes: [scrappa, jsearch, adzuna, remotive, arbeitnow]
+    fuentes: [scrappa, jsearch, adzuna, remotive]
   - nombre: Backend Madrid
     texto: backend developer
     pais: es

@@ -12,9 +12,10 @@ from app.sources.remotive import html_a_texto
 
 URL_API = "https://scrappa.co/api/indeed/jobs"
 
-# Un crédito por llamada, no por oferta: cada llamada devuelve hasta 20. Con 500
-# créditos gratis al mes salen unas 10.000 ofertas, el mejor ratio de las cinco fuentes.
-RESULTADOS_POR_LLAMADA = 20
+# Un crédito por llamada, no por oferta, y `limit` llega hasta 100. Con 500 créditos
+# gratis al mes salen hasta 50.000 ofertas: el mejor ratio de las cinco fuentes por
+# varios órdenes de magnitud.
+MAX_RESULTADOS = 100
 
 _PAISES = {"es": "Spain", "pt": "Portugal", "fr": "France", "de": "Germany",
            "gb": "United Kingdom", "us": "United States", "it": "Italy", "nl": "Netherlands"}
@@ -42,6 +43,8 @@ class ScrappaSource(FuenteConFiltroEnServidor):
     def __init__(
         self,
         api_key: str,
+        resultados: int = 50,
+        orden: str = "relevance",
         timeout: float = 60.0,
         limitador: LimitadorPorHost | None = None,
         presupuesto: Presupuesto | None = None,
@@ -49,6 +52,12 @@ class ScrappaSource(FuenteConFiltroEnServidor):
         if not api_key:
             raise ValueError("Scrappa necesita SCRAPPA_API_KEY")
         self.api_key = api_key
+        # `limit` admite hasta 100 y el precio no cambia: sigue siendo un crédito por
+        # llamada. Pedir los 20 por defecto era desperdiciar cuatro quintas partes de
+        # cada crédito. Se deja en 50 para no inflar de golpe las llamadas al
+        # clasificador; subirlo a 100 es cambiar una línea de configuración.
+        self.resultados = max(1, min(resultados, MAX_RESULTADOS))
+        self.orden = orden
         self._timeout = timeout
         self._limitador = limitador or LimitadorPorHost()
         self._presupuesto = presupuesto or SinLimite()
@@ -66,6 +75,12 @@ class ScrappaSource(FuenteConFiltroEnServidor):
                 "query": query.texto,
                 "location": query.ubicacion or _PAISES.get(query.pais, query.pais),
                 "country": query.pais,
+                "limit": self.resultados,
+                "sort": self.orden,
+                # Sin esto la interfaz sale en inglés y las ofertas españolas llegan
+                # con los campos traducidos a medias.
+                "hl": query.pais,
+                "gl": query.pais,
             },
             headers={"X-API-KEY": self.api_key, "Accept": "application/json"},
             timeout=self._timeout,

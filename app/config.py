@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # como JobsPipe. Es el mejor ratio del proyecto: ~10.000 ofertas al mes gratis.
     scrappa_api_key: str = ""
     scrappa_limite_mensual: int = 450
+    # `limit` de la API llega a 100 y el crédito es el mismo: pedir menos es tirarlo.
+    scrappa_resultados: int = 50
 
     ruta_bd: str = "data/app.db"
     hora_run_diario: str = "07:00"
