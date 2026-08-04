@@ -16,6 +16,11 @@ from app.schemas import PerfilCandidato, Preferencias, RawJob, SearchQuery
 
 MAX_INTENTOS = 3
 
+# Marca de los runs que murieron sin cerrarse: matados a mano, caída del proceso o
+# reinicio de la máquina. Sin ella, su fila figura "En curso" indefinidamente y no hay
+# forma de distinguir un run vivo de un cadáver.
+MOTIVO_INTERRUMPIDO = "interrumpido"
+
 # Estado terminal de una oferta que agotó los intentos. `models.py` ya lo documenta en
 # el comentario de `estado_clasificacion`; aquí es donde se asigna. Sin él la oferta se
 # quedaba en "pendiente" para siempre: fuera de la cola por el filtro de intentos y
@@ -85,6 +90,38 @@ def _errores_de_ingesta(stats: dict[str, dict]) -> list[dict]:
     return errores
 
 
+def cierra_runs_colgados(
+    sesion: Session, ahora: Callable[[], datetime] | None = None
+) -> int:
+    """Cierra los runs que se quedaron sin `fin`, y devuelve cuántos eran.
+
+    Se apoya en que los runs NO se solapan: el botón de "buscar ahora" tiene su propia
+    guarda y el scheduler usa `max_instances=1`. Por eso, cuando arranca un run,
+    cualquier otro sin cerrar está muerto por definición y puede cerrarse sin riesgo.
+
+    No se cierra por antigüedad a propósito: un run legítimo puede tardar horas (179
+    ofertas a 62 segundos eran tres), y cerrarlo por reloj sería mentir en la otra
+    dirección, marcando como muerto algo que sigue trabajando.
+    """
+    reloj = ahora or (lambda: datetime.now(UTC).replace(tzinfo=None))
+    colgados = sesion.scalars(select(Run).where(Run.fin.is_(None))).all()
+
+    for run in colgados:
+        run.fin = reloj()
+        # Reasignar la lista entera: SQLAlchemy no detecta un append sobre un JSON.
+        run.errores = [
+            *(run.errores or []),
+            _error(
+                MOTIVO_INTERRUMPIDO,
+                error="El run no llegó a cerrarse; se da por interrumpido al arrancar otro.",
+            ),
+        ]
+
+    if colgados:
+        sesion.commit()
+    return len(colgados)
+
+
 def ejecuta_run(
     sesion: Session,
     *,
@@ -105,6 +142,8 @@ def ejecuta_run(
     llamada más, la cola queda intacta para mañana y el run se cierra registrando el
     motivo. `dormir` se inyecta para que los tests no duerman de verdad.
     """
+    cierra_runs_colgados(sesion)
+
     perfil = _carga_perfil(sesion)
     prefs = _carga_preferencias(sesion)
 
