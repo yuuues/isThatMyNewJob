@@ -21,10 +21,10 @@ def marca_para_reclasificar(sesion: Session, *, saltar_decididas: bool = True) -
     Las que el usuario ya decidió a mano se saltan por defecto: su veredicto ya no manda
     nada, y reabrirlas sólo las devolvería a la lista de revisión.
 
-    Se selecciona por `estado_clasificacion != "pendiente"` y no por "tiene clasificación"
-    a propósito: así entran también las `descartada_por_regla`, que no tienen fila en
-    `classification` pero cuyo descarte pudo decidirse con la ubicación mala, que es
-    justamente lo que se viene a corregir.
+    Sólo entran las que tienen un veredicto del modelo. Las `descartada_por_regla` se
+    quedan fuera a propósito: el prefiltro no cambia en esta versión, así que volverían a
+    pasar por la misma regla con los mismos datos y saldrían descartadas igual. Marcarlas
+    sería trasiego con un recuento que engaña.
 
     `intentos_clasificacion` vuelve a cero por el mismo motivo que en `reintentar()` de
     app/web/routes_runs.py: sin eso el pipeline ve la oferta agotada nada más sacarla de
@@ -34,14 +34,13 @@ def marca_para_reclasificar(sesion: Session, *, saltar_decididas: bool = True) -
 
     marcadas = 0
     for job in sesion.scalars(
-        select(Job).where(Job.estado_clasificacion != "pendiente")
+        select(Job).where(Job.estado_clasificacion == "clasificada")
     ).all():
         if saltar_decididas and job.id in decididas:
             continue
 
         sesion.execute(delete(Clasificacion).where(Clasificacion.job_id == job.id))
         job.estado_clasificacion = "pendiente"
-        job.motivo_regla = None
         job.intentos_clasificacion = 0
         marcadas += 1
 

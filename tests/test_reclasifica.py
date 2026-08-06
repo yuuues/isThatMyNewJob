@@ -66,17 +66,17 @@ def test_deja_los_intentos_de_clasificacion_a_cero(sesion):
     assert job.intentos_clasificacion == 0
 
 
-def test_limpia_el_motivo_de_regla(sesion):
+def test_no_toca_las_descartadas_por_regla(sesion):
+    """El prefiltro no cambia en esta versión: volverían a descartarse igual."""
     job = crea_job(
         sesion, "1", estado_clasificacion="descartada_por_regla",
         motivo_regla="zona fuera de rango: Madrid",
     )
 
-    marca_para_reclasificar(sesion)
+    assert marca_para_reclasificar(sesion) == 0
 
     sesion.refresh(job)
-    assert job.motivo_regla is None
-    assert job.estado_clasificacion == "pendiente"
+    assert job.estado_clasificacion == "descartada_por_regla"
 
 
 def test_salta_las_ofertas_que_el_usuario_ya_decidio(sesion):
@@ -105,6 +105,28 @@ def test_puede_incluir_las_decididas_si_se_pide(sesion):
     sesion.refresh(job)
     assert marcadas == 1
     assert job.estado_clasificacion == "pendiente"
+
+
+def test_no_arrasa_las_clasificaciones_de_las_demas_ofertas(sesion):
+    """El borrado tiene que ir acotado a la oferta que se está marcando.
+
+    Con una sola oferta en la base, un `delete(Clasificacion)` sin `where` es
+    indistinguible de uno acotado. Con dos, y una de ellas protegida por su decisión, la
+    diferencia es que la protegida se queda sin veredicto: exactamente el daño que este
+    test existe para impedir.
+    """
+    a_marcar = crea_job(sesion, "1")
+    crea_clasificacion(sesion, a_marcar)
+    decidida = crea_job(sesion, "2")
+    crea_clasificacion(sesion, decidida)
+    sesion.add(Decision(job_id=decidida.id, estado="aplicada", motivo="Me presenté"))
+    sesion.commit()
+
+    assert marca_para_reclasificar(sesion) == 1
+
+    assert sesion.scalar(
+        select(Clasificacion).where(Clasificacion.job_id == decidida.id)
+    ) is not None
 
 
 def test_no_toca_una_oferta_que_nunca_se_clasifico(sesion):
