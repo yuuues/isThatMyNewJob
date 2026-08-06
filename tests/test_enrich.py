@@ -199,4 +199,39 @@ def test_una_oferta_ya_enriquecida_no_vuelve_a_entrar(sesion):
     segunda = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
 
     assert primera.completadas == 1
+    # `primera.intentadas` no es redundante con `completadas`: sin ella, la única
+    # aserción sobre el contador sería `segunda.intentadas == 0`, que vale 0 también si
+    # nadie lo incrementa nunca.
+    assert primera.intentadas == 1
     assert segunda.intentadas == 0
+
+
+def test_la_modalidad_puede_venir_solo_en_el_titulo(sesion):
+    """El título entra en el recálculo, no sólo la descripción.
+
+    "Backend Developer Remoto" con un cuerpo que no menciona la modalidad es un caso
+    corriente en Adzuna. Pasando sólo el texto al detector, esa oferta se quedaría en
+    "desconocida" y volvería a saltarse las reglas de modalidad y de zona, que es
+    exactamente lo que este paso viene a arreglar.
+    """
+    job = crea_job(sesion, "1", titulo="Backend Developer Remoto", modalidad="desconocida")
+    neutro = "Buscamos a alguien para el equipo de plataforma y sus servicios internos."
+
+    enriquece_descripciones(sesion, scraper=scraper_que_devuelve(neutro), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.modalidad == "remoto"
+
+
+def test_el_tope_por_run_llega_hasta_la_consulta(sesion):
+    """`test_respeta_el_tope` prueba el helper; esto prueba que el paso se lo pasa.
+
+    Sin esta comprobación, ignorar `max_por_run` dentro del bucle no lo detecta nadie, y
+    el run drenaría el atraso entero de una sentada en vez de los 40 previstos.
+    """
+    for i in range(3):
+        crea_job(sesion, str(i))
+
+    resumen = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=2)
+
+    assert resumen.intentadas == 2
