@@ -9,15 +9,38 @@ La API de Adzuna corta las descripciones a 500 caracteres y remata con puntos su
 No es configurable ni existe un campo con el texto completo; está verificado contra la API
 real y documentado en `app/sources/adzuna.py:10`.
 
-El daño no es sólo estético. `AdzunaSource._normaliza()` deduce la modalidad llamando a
+El daño no es sólo estético, y va en una dirección que no es la obvia.
+`AdzunaSource._normaliza()` deduce la modalidad llamando a
 `detecta_modalidad(f"{titulo} {descripcion}")` **sobre el extracto truncado**. Una oferta que
-dice "para nuestra oficina de Sevilla en formato Híbrido" en el carácter 900 se guarda hoy
-como `modalidad = "desconocida"`, y `aplica_prefiltro()` filtra por modalidad. Es decir: el
-truncado no sólo empobrece lo que lee el clasificador, además **descarta ofertas buenas antes
-de que ninguna IA las vea**.
+dice "para nuestra oficina de Sevilla en formato Híbrido" en el carácter 900 se guarda hoy como
+`modalidad = "desconocida"`. Y en `app/prefilter.py` la modalidad desconocida está **exenta de
+dos reglas**:
 
-Medido sobre la base de datos actual: **136 de las 138 ofertas de Adzuna están truncadas
-(98,5 %)**. No es un caso borde, es la fuente entera.
+```python
+# prefilter.py:121 — la regla de modalidad sólo se aplica si se conoce
+if job.modalidad != "desconocida" and job.modalidad not in prefs.modalidades:
+# prefilter.py:124 — y la de zona está condicionada a la modalidad
+if job.modalidad in ("presencial", "hibrido") and prefs.zonas:
+```
+
+Así que el truncado no descarta ofertas buenas: hace lo contrario, **cuela ofertas que las
+reglas deberían haber parado**. Con las preferencias reales de este proyecto
+(`modalidades: [remoto, hibrido]`, `zonas: [barcelona, cataluña]`), la oferta de Sevilla en
+híbrido *debería* descartarse, y hoy no se descarta — llega al clasificador, gasta una llamada
+y aparece en la lista.
+
+Medido sobre la base de datos actual:
+
+- **136 de las 138 ofertas de Adzuna están truncadas (98,5 %).** No es un caso borde, es la
+  fuente entera.
+- **105 de 138 (76 %) tienen `modalidad = "desconocida"`**, y por tanto se saltaron las dos
+  reglas. Entre ellas, 19 en Madrid, 3 en Valencia, 2 en Baleares, 2 en Alicante y 1 en Vigo,
+  todas fuera de las zonas aceptadas.
+- Las 16 `descartada_por_regla` que sí se pararon lo fueron por zona (8), veto de `.net` (4) y
+  salario (4) — nunca por modalidad, porque la regla de modalidad no llegó a evaluarse.
+
+El resultado esperado del cambio, por tanto, es **más descartes por regla, no menos**, y son
+descartes correctos que ahorran llamadas al LLM.
 
 La ficha pública de Adzuna sí publica el texto íntegro. El objetivo es leerlo por HTTP y
 completar la oferta antes de prefiltrar.
@@ -99,24 +122,53 @@ nada entre fuentes salvo el bucle y el manejo de errores: cada fuente apunta a u
 distinto con un HTML distinto. Cuando aparezca el segundo caso, extraer la interfaz será
 trivial y estará informada por dos ejemplos reales en lugar de por uno imaginado.
 
-### Qué ofertas entran: todas las truncadas, sin reclasificar
+### Qué ofertas entran: todas las truncadas, y se reevalúan
 
 La condición de trabajo es "es de Adzuna y está truncada", **sin mirar
 `estado_clasificacion`**. Las 136 del atraso entran en los primeros runs.
 
-Descartadas:
+Descartada: **sólo las `pendiente`**, que dejaría el histórico de Adzuna juzgado con 500
+caracteres para siempre.
 
-- **Sólo las `pendiente`.** Deja el histórico de Adzuna juzgado con 500 caracteres para
-  siempre.
-- **Rellenar el atraso y reclasificar.** `Clasificacion` tiene `job_id` único, así que
-  reclasificar obliga a decidir si se pisa el veredicto viejo o se guarda historial: un cambio
-  de modelo de datos que no hace falta para resolver el problema planteado. Además serían 136
-  llamadas al LLM de golpe contra un `max_clasificaciones_por_run` de 200.
+Y el veredicto viejo **sí se rehace**, porque no está sólo mal informado: 16 ofertas pasaron
+por un prefiltro que ni siquiera llegó a evaluar las reglas que le tocaban, por lo explicado en
+el planteamiento del problema. Conservar esos veredictos sería conservar el error.
 
-Consecuencia asumida y explícita: **las clasificaciones ya emitidas no se rehacen.** El texto
-completo queda en la base de datos y se ve en la ficha web, pero el veredicto sigue siendo el
-que se emitió con el extracto. Reclasificar el atraso es una decisión aparte, fuera de este
-spec.
+### Cómo se resetea: lo hace el propio paso, oferta por oferta
+
+Al completar una oferta con éxito, el paso borra su fila de `classification`, pone
+`estado_clasificacion = "pendiente"` y limpia `motivo_regla`. Se reclasifica en el bucle de ese
+mismo run, ya con el texto completo y la modalidad corregida.
+
+Descartado: **un reset masivo previo** (marcar las 138 como pendientes de una vez, por comando
+o por migración). Tiene un problema de orden fatal: con un tope de 40 scrapes por run, las
+otras 98 se reclasificarían **ese mismo run y otra vez con el texto truncado**, gastando 98
+llamadas al LLM para reproducir el error que se venía a corregir. Atando el reset al éxito del
+scrape eso es imposible por construcción, y el ritmo sale solo: ~40 al día, unos cuatro días
+para drenar el atraso.
+
+Dos precisiones sobre el alcance del reset:
+
+- **Entran también las 16 `descartada_por_regla`**, no sólo las 122 `clasificada`. Son las que
+  más lo necesitan: su descarte se decidió con una modalidad inventada.
+- **Se saltan las ofertas que ya tienen `Decision`.** Son 3, las tres `descartada_por_mi`. Ya
+  las juzgó el usuario a mano; gastar una llamada en reopinar sobre algo que ya cerró no aporta
+  nada, y reabrirlas en la lista sería una molestia.
+
+Comprobado antes de decidirlo, porque era el riesgo real de borrar clasificaciones: **el
+few-shot no depende de `Clasificacion`.** `ejemplos_few_shot()` en `app/feedback.py:105` hace
+`select(Decision, Job)` y nada más. Las 11 decisiones del usuario, y las 3 de Adzuna, sobreviven
+intactas al reset.
+
+### Coste
+
+El proveedor configurado es DeepSeek (`deepseek-v4-flash`); las 334 clasificaciones existentes
+ya son suyas. El relleno son ~135 reclasificaciones repartidas en unos cuatro runs, muy por
+debajo del `max_clasificaciones_por_run` de 200.
+
+El coste que no es puntual y conviene dejar escrito: la entrada de cada clasificación de Adzuna
+pasa de ~500 a ~2100 caracteres, unas 4×, **en todos los runs futuros**, no sólo en el relleno.
+Con `deepseek-v4-flash` es calderilla, pero es permanente.
 
 ### Corte de reintentos: contador, con los 404 como caso inmediato
 
@@ -188,7 +240,9 @@ Selecciona `Job.fuente == "adzuna"` **y** `descripcion_truncada` **y** no agotad
 como hace el bucle de clasificación:
 
 - Éxito → escribe `descripcion`, apaga `descripcion_truncada` y **recalcula `modalidad`** con
-  `detecta_modalidad(f"{titulo} {descripcion_larga}")`.
+  `detecta_modalidad(f"{titulo} {descripcion_larga}")`. Después, **si la oferta no tiene
+  `Decision`**, la reevalúa: borra su fila de `classification`, pone
+  `estado_clasificacion = "pendiente"` y limpia `motivo_regla`.
 - `DescripcionNoDisponible` → `intentos_scrape = 3` (agotada de una vez).
 - Cualquier otro fallo → `intentos_scrape += 1`; la oferta queda truncada y se reintenta mañana.
 
@@ -269,8 +323,32 @@ El resumen va a `run.stats["_enriquecimiento"]`, en paralelo a `_totales`:
 
 ```python
 {"intentadas": int, "completadas": int, "fallidas": int, "agotadas": int,
- "cortado_por": None | "racha_de_fallos"}
+ "reevaluadas": int, "cortado_por": None | "racha_de_fallos"}
 ```
+
+## Cada oferta se enriquece y se reclasifica una sola vez
+
+Merece sección propia porque es la duda razonable que levanta atar el reset al
+enriquecimiento: ¿acaban las ofertas de Adzuna reclasificándose en bucle?
+
+No. El paso selecciona `descripcion_truncada == True`, y lo primero que hace al completar una
+oferta es apagar esa bandera. A partir de ahí la oferta **no vuelve a entrar en la selección
+nunca**, y por tanto no vuelve a resetearse. Tampoco puede volver a marcarse como truncada:
+`_esta_truncada()` sólo se evalúa en `AdzunaSource._normaliza()`, durante la ingesta, y una
+oferta ya guardada no se reingiere — la para la deduplicación por `hash_dedup` y por
+`(fuente, external_id)`.
+
+Régimen estacionario, pasados los ~4 días del atraso: una oferta nueva de Adzuna se ingiere
+truncada, se enriquece en ese mismo run y se clasifica **una vez**. El reset es un no-op para
+ella (no hay `classification` que borrar y ya estaba `pendiente`). El gasto de LLM por oferta
+es exactamente el de hoy.
+
+Único caso en que una oferta se clasifica dos veces: si un run trae **más de
+`adzuna_scrape_max_por_run` ofertas nuevas de Adzuna**, las que se salen del cupo se clasifican
+truncadas ese run y se reclasifican al siguiente, ya completas. Está acotado a 2 y no se repite.
+Hoy no puede ocurrir — las cifras reales de `nuevas` son 0–27 frente a un cupo de 40 — y el
+orden descendente por `ingerida_en` está elegido justamente para que el atraso nunca desplace a
+las ofertas del día. Si algún día pasa, se sube el cupo.
 
 ## Configuración
 
@@ -311,17 +389,31 @@ no los 80 KB de la página real.
 - corta el paso a los cinco fallos consecutivos
 - procesa primero lo más recién ingerido
 
+Del reset, dentro del mismo módulo:
+
+- al completar, borra la `Clasificacion` y devuelve la oferta a `pendiente`
+- una `descartada_por_regla` vuelve a `pendiente` y se le limpia `motivo_regla`
+- una oferta con `Decision` **no** se resetea, y su clasificación se conserva
+- una oferta ya enriquecida **no vuelve a entrar en la selección**: se enriquece y se resetea
+  una sola vez (el test que cierra la duda del bucle infinito)
+- al fallar el scrape, la clasificación existente **no** se toca
+
 **Integración** (`tests/test_pipeline.py`), el test que es este spec en una línea:
 
-Una oferta cuyo extracto de 500 caracteres no menciona la modalidad, pero cuyo texto largo dice
-"para nuestra oficina de Sevilla en formato Híbrido", con unas preferencias que sólo aceptan
-híbrido. **Sin el paso, `aplica_prefiltro` la descarta. Con el paso, sobrevive y llega al
-clasificador.**
+Una oferta cuyo extracto de 500 caracteres no menciona la modalidad — y que por tanto se guarda
+como `desconocida` — pero cuyo texto largo dice "para nuestra oficina de Sevilla en formato
+Híbrido", con `zonas: ["barcelona"]`. **Sin el paso, `modalidad` es `desconocida`, la regla de
+zona ni se evalúa y la oferta llega al clasificador. Con el paso, pasa a `hibrido`,
+`aplica_prefiltro` la descarta por zona y no se gasta ninguna llamada al LLM.**
+
+El sentido de la flecha importa y es el contrario del que parece: el paso no rescata ofertas
+del prefiltro, hace que el prefiltro funcione.
 
 ## Fuera de alcance
 
-- Reclasificar las ofertas ya clasificadas con el texto completo. Decisión aparte; arrastra la
-  restricción de `job_id` único en `Clasificacion`.
+- Conservar historial de clasificaciones. El veredicto viejo se borra, no se archiva: quitar el
+  `job_id` único de `Clasificacion` y añadir una noción de "vigente" es un cambio de modelo de
+  datos que no hace falta para esto, y el veredicto que se pierde se emitió sobre datos malos.
 - Extraer salario, ubicación o etiquetas del HTML.
 - Un enriquecedor genérico con registro por fuente.
 - Refactorizar `html_a_texto()` en `app/sources/remotive.py`.
