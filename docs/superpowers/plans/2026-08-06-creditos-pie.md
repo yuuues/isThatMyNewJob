@@ -7,9 +7,9 @@ su Liberapay, y que el README diga quién lo hace.
 
 **Architecture:** Sólo se toca `base.html`, que es la plantilla madre de las seis vistas:
 el pie ya está en todas, así que no hay ruta nueva, ni vista, ni entrada en el `<nav>`.
-Antes hay que estrechar un test existente que prohíbe la cadena `https://` en la
-plantilla —afirmación demasiado ancha para lo que quería decir— y mudarlo al fichero
-donde vive el resto del contrato de estáticos.
+Antes hay que quitar dos tests que prohíben la cadena `https://` en la plantilla
+—afirmación demasiado ancha para lo que querían decir—, porque lo que de verdad
+protegen ya lo protege un tercero que mira la página renderizada.
 
 **Tech Stack:** Jinja2 + Pico CSS 2.1.1 (framework sin clases: se estiliza HTML
 semántico, no `<div class="...">`), pytest + `fastapi.testclient`.
@@ -30,19 +30,31 @@ tests/web/test_pie.py -v`.
 
 ### Task 1: Estrechar el test de "no carga nada de fuera"
 
-Hoy `tests/web/test_tema.py` termina afirmando que `base.html` no contiene la cadena
-`https://`. En cuanto el pie enlace a GitHub, ese test falla — y falla por el motivo
-equivocado, porque un `<a href>` no carga nada. Se estrecha a las etiquetas que sí cargan
-recursos y se muda a `test_arranque.py`, donde ya vive el contrato de los estáticos de
-`base.html`.
+> **Corregida durante la ejecución.** El plan original mandaba escribir un test nuevo
+> que mirase las etiquetas que cargan recursos en `base.html`. Al implementarla apareció
+> que `tests/web/test_arranque.py` ya tiene `test_la_pagina_no_carga_nada_de_fuera`,
+> que hace eso mismo y mejor —sobre la página renderizada en vez de sobre el fichero—,
+> y que además hay un SEGUNDO test que busca `https://` a pelo. Así que la tarea no
+> añade nada: borra los dos redundantes.
+
+Dos tests afirman hoy que `base.html` no contiene la cadena `https://`:
+`test_el_selector_de_tema_no_carga_nada_de_fuera` (en `test_tema.py`) y
+`test_la_plantilla_base_no_contiene_ninguna_url_externa` (en `test_arranque.py`). En
+cuanto el pie enlace a GitHub, los dos fallan — y fallan por el motivo equivocado, porque
+un `<a href>` no carga nada.
+
+Lo que querían decir ya lo dice `test_la_pagina_no_carga_nada_de_fuera`, en el mismo
+`test_arranque.py`: mira los `src` y `href` de las etiquetas que cargan recursos sobre la
+página renderizada. Como `base.html` es la plantilla madre de todas las vistas, ese test
+la cubre entera.
 
 Esta tarea va **primero y sola**: al terminarla la suite sigue verde sin haber tocado la
 plantilla, así que si algo se rompe se sabe que fue el test y no el pie.
 
 **Files:**
-- Modify: `tests/web/test_tema.py:106-111` (se borra el test)
-- Modify: `tests/web/test_arranque.py:115` (se añade detrás de
-  `test_la_plantilla_base_enlaza_pico_antes_que_estilo`)
+- Modify: `tests/web/test_tema.py:106-111` (se borra el test, y la constante `BASE_HTML`)
+- Modify: `tests/web/test_arranque.py` (se borra el duplicado; `iframe` entra en el
+  regex del que se queda)
 
 - [ ] **Step 1: Borrar el test viejo de `test_tema.py`**
 
@@ -75,33 +87,36 @@ grep -n "BASE_HTML" tests/web/test_tema.py
 
 Esperado: sin resultados.
 
-- [ ] **Step 2: Añadir el test estrechado a `test_arranque.py`**
+- [ ] **Step 2: Borrar el duplicado de `test_arranque.py` y ensanchar el que se queda**
 
-Insertarlo justo después de `test_la_plantilla_base_enlaza_pico_antes_que_estilo`, que
-acaba en la línea 114, y antes de `test_la_pagina_carga_pico_desde_local`:
+Borrar este test (está entre `test_la_pagina_no_carga_nada_de_fuera` y
+`test_la_plantilla_base_enlaza_las_cinco_vistas`):
 
 ```python
-def test_la_plantilla_base_no_carga_nada_de_fuera():
-    """Ni CDN ni fuentes externas: la herramienta tiene que funcionar sin red.
-
-    Se miran los ORÍGENES de las etiquetas que cargan recursos, no el texto del
-    fichero. Buscar `https://` a pelo era lo que hacía antes este test, y desde que
-    el pie enlaza a GitHub, a la página del autor y a Liberapay eso daría un falso
-    positivo: un <a> no carga nada, lo sigue el usuario si quiere. Un <script src>
-    o un <link href> contra un CDN sí, y son los que dejarían la herramienta
-    dependiendo de la red.
-    """
+def test_la_plantilla_base_no_contiene_ninguna_url_externa():
     contenido = BASE_HTML.read_text(encoding="utf-8")
 
-    for etiqueta in re.findall(r"<(?:script|link|img|iframe)\b[^>]*>", contenido):
-        for url in re.findall(r'(?:src|href)\s*=\s*"([^"]*)"', etiqueta):
-            assert not url.startswith(("http://", "https://", "//")), (
-                f"{etiqueta.strip()} carga algo de fuera"
-            )
+    assert "http://" not in contenido
+    assert "https://" not in contenido
 ```
 
-`re`, `Path`, `deps` y la constante `BASE_HTML` ya están importados en ese fichero
-(líneas 9, 11, 20 y 24). No hace falta añadir ningún import.
+Y en `test_la_pagina_no_carga_nada_de_fuera`, que es el que sostiene la cobertura a
+partir de ahora, añadir `iframe` a la lista de etiquetas para no perder nada respecto al
+que se borra. Su `re.findall` pasa de:
+
+```python
+        r'<(?:script|link|img)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
+```
+
+a:
+
+```python
+        r'<(?:script|link|img|iframe)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
+```
+
+Nada más de ese test se toca. `BASE_HTML` sigue en uso en el fichero
+(`test_la_plantilla_base_enlaza_pico_antes_que_estilo`,
+`test_la_plantilla_base_enlaza_las_cinco_vistas`), así que la constante se queda.
 
 - [ ] **Step 3: Correr los dos ficheros y comprobar que siguen verdes**
 
@@ -109,14 +124,16 @@ def test_la_plantilla_base_no_carga_nada_de_fuera():
 docker compose run --rm app pytest tests/web/test_tema.py tests/web/test_arranque.py -q
 ```
 
-Esperado: todo PASS. El test nuevo pasa contra el `base.html` actual, que sólo enlaza
-`/static/pico.min.css`, `/static/estilo.css` y `/static/htmx.min.js`.
+Esperado: todo PASS, con dos tests menos que antes. Para confirmar que el que se queda
+comprueba de verdad lo que dice: inyectar temporalmente
+`<link rel="stylesheet" href="https://cdn.example.com/probe.css" />` en `base.html`, ver
+que `test_la_pagina_no_carga_nada_de_fuera` FALLA, y revertir.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add tests/web/test_tema.py tests/web/test_arranque.py
-git commit -m "Estrecha el contrato de carga externa de la plantilla base"
+git commit -m "Quita los dos controles de URL externa redundantes"
 ```
 
 ---
@@ -270,8 +287,8 @@ Esperado: PASS todos.
 docker compose run --rm app pytest -q
 ```
 
-Esperado: PASS. Interesa sobre todo que sigan verdes `tests/web/test_arranque.py` (el
-test estrechado en la Task 1 es el que autoriza los `https://` de estos enlaces) y
+Esperado: PASS. Interesa sobre todo que sigan verdes `tests/web/test_arranque.py` (los
+dos borrados en la Task 1 son los que habrían saltado con estos `https://`) y
 `tests/web/test_ofertas.py`.
 
 - [ ] **Step 6: Commit**
