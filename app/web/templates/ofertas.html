@@ -63,6 +63,12 @@
       <option value="si"{% if filtros.cerradas == "si" %} selected{% endif %}>Incluir las cerradas</option>
     </select>
 
+    <select name="antiguedad" aria-label="Antigüedad de la oferta">
+      {% for valor, etiqueta in opciones_antiguedad %}
+      <option value="{{ valor }}"{% if filtros.antiguedad == valor %} selected{% endif %}>{{ etiqueta }}</option>
+      {% endfor %}
+    </select>
+
     <button type="submit">Filtrar</button>
   </fieldset>
 </form>

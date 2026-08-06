@@ -9,7 +9,7 @@ monta `tests/web/conftest.py` y no interviene ningún proveedor.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -124,23 +124,30 @@ def test_dentro_de_un_grupo_la_confianza_alta_va_primero(cliente: TestClient, cr
     )
 
 
+# Las fechas de los tests son relativas a hoy y no absolutas: con un filtro por
+# antigüedad en el listado, una fecha fija se va quedando vieja sola y el test empieza a
+# fallar un día cualquiera sin que nadie haya tocado nada.
+def _hace(dias: int) -> datetime:
+    return datetime.now() - timedelta(days=dias)
+
+
 def test_a_igual_confianza_manda_la_fecha_mas_reciente(cliente: TestClient, crea_clasificada):
-    crea_clasificada(titulo="Publicada en enero", publicada_en=datetime(2026, 1, 15))
-    crea_clasificada(titulo="Publicada en julio", publicada_en=datetime(2026, 7, 15))
+    crea_clasificada(titulo="Publicada hace mucho", publicada_en=_hace(60))
+    crea_clasificada(titulo="Publicada hace poco", publicada_en=_hace(2))
 
     html = cliente.get("/").text
 
-    assert posicion(html, "Publicada en julio") < posicion(html, "Publicada en enero")
+    assert posicion(html, "Publicada hace poco") < posicion(html, "Publicada hace mucho")
 
 
 def test_una_oferta_sin_fecha_no_adelanta_a_una_reciente(cliente: TestClient, crea_clasificada):
     """Sin fecha va al final, no al principio: `None` no es 'recién publicada'."""
     crea_clasificada(titulo="Sin fecha conocida", publicada_en=None)
-    crea_clasificada(titulo="Publicada en julio", publicada_en=datetime(2026, 7, 15))
+    crea_clasificada(titulo="Publicada hace poco", publicada_en=_hace(2))
 
     html = cliente.get("/").text
 
-    assert posicion(html, "Publicada en julio") < posicion(html, "Sin fecha conocida")
+    assert posicion(html, "Publicada hace poco") < posicion(html, "Sin fecha conocida")
 
 
 def test_una_oferta_truncada_lleva_marca_y_una_completa_no(cliente: TestClient, crea_clasificada):
@@ -336,3 +343,91 @@ def test_la_lista_vacia_lo_dice_en_vez_de_quedarse_en_blanco(cliente: TestClient
     html = cliente.get("/").text
 
     assert "No hay ofertas" in html
+
+
+def test_por_defecto_se_ocultan_las_publicadas_hace_mas_de_tres_meses(
+    cliente: TestClient, crea_clasificada
+):
+    """33 ofertas de más de seis meses seguían en la lista como si fueran actuales.
+
+    El caso real: tres de la misma consultora, de junio, agosto y octubre de 2025, que
+    además estaban cerradas en origen.
+    """
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+    crea_clasificada(titulo="Oferta fresca", publicada_en=_hace(10))
+
+    html = cliente.get("/").text
+
+    assert "Oferta fresca" in html
+    assert "Oferta rancia" not in html
+
+
+def test_se_pueden_pedir_las_de_cualquier_fecha(cliente: TestClient, crea_clasificada):
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+
+    html = cliente.get("/?antiguedad=todas").text
+
+    assert "Oferta rancia" in html
+
+
+def test_una_oferta_sin_fecha_se_ve_con_cualquier_umbral(
+    cliente: TestClient, crea_clasificada
+):
+    """No saber cuándo se publicó no es motivo para esconderla.
+
+    Mismo principio que `aplica_prefiltro()`: ante la duda, no se descarta. Son 2 de 434
+    ofertas reales y todas de JSearch.
+    """
+    crea_clasificada(titulo="Sin fecha conocida", publicada_en=None)
+
+    assert "Sin fecha conocida" in cliente.get("/?antiguedad=30").text
+
+
+def test_el_desplegable_recuerda_lo_elegido(cliente: TestClient, crea_clasificada):
+    crea_clasificada(titulo="Oferta fresca", publicada_en=_hace(10))
+
+    html = cliente.get("/?antiguedad=todas").text
+
+    assert re.search(r'<option value="todas"[^>]*selected', html)
+
+
+def test_el_filtro_de_antiguedad_se_combina_con_el_de_cerradas(
+    cliente: TestClient, crea_clasificada
+):
+    """Los filtros se suman, no se pisan: reciente y cerrada sigue oculta."""
+    crea_clasificada(titulo="Fresca pero cerrada", publicada_en=_hace(10), cerrada=True)
+    crea_clasificada(titulo="Fresca y viva", publicada_en=_hace(10))
+
+    html = cliente.get("/").text
+
+    assert "Fresca y viva" in html
+    assert "Fresca pero cerrada" not in html
+
+
+def test_un_umbral_que_no_se_entiende_no_esconde_nada(
+    cliente: TestClient, crea_clasificada
+):
+    """El formulario sólo ofrece valores válidos, así que esto es una URL escrita a mano.
+
+    Esconder ofertas por un parámetro que no se entiende sería lo peor que puede hacer:
+    el usuario no vería ni el motivo ni las ofertas.
+    """
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+
+    assert "Oferta rancia" in cliente.get("/?antiguedad=pepe").text
+
+
+def test_el_limite_es_inclusivo(cliente: TestClient, crea_clasificada):
+    """Una oferta de exactamente 90 días entra; una de 91 no.
+
+    Sin este test, `<=` y `<` son indistinguibles para la suite y el borde puede cambiar
+    de sitio sin que nada avise. No es que 90 frente a 91 le importe a nadie: es que un
+    off-by-one silencioso en un filtro es exactamente lo que nadie sale a buscar.
+    """
+    crea_clasificada(titulo="Justo en el limite", publicada_en=_hace(90))
+    crea_clasificada(titulo="Un dia pasada", publicada_en=_hace(91))
+
+    html = cliente.get("/").text
+
+    assert "Justo en el limite" in html
+    assert "Un dia pasada" not in html

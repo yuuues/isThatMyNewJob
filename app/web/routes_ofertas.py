@@ -80,6 +80,23 @@ ORDEN_CONFIANZA: dict[str, int] = {"alta": 0, "media": 1, "baja": 2}
 ESTADO_TODAS = "todas"
 ESTADO_SIN_DECIDIR = ""
 
+# Días de antigüedad que se muestran por defecto en el listado.
+#
+# Medido sobre 434 ofertas reales: 33 tenían más de seis meses y seguían en la lista como
+# si fueran actuales, una de ellas de catorce meses. Pero el umbral no puede ser agresivo:
+# de las 15 decisiones del usuario, 6 son sobre ofertas de más de 30 días y tres de ellas
+# son candidaturas enviadas, la más antigua a 88 días. Los datos pedían 180; el usuario
+# eligió 90 sabiendo que eso oculta 23 de las 99 ofertas interesantes, porque el
+# desplegable las recupera con un clic.
+ANTIGUEDAD_POR_DEFECTO = "90"
+
+OPCIONES_ANTIGUEDAD: list[tuple[str, str]] = [
+    ("30", "Del último mes"),
+    ("90", "De los últimos 3 meses"),
+    ("180", "De los últimos 6 meses"),
+    ("todas", "De cualquier fecha"),
+]
+
 ETIQUETAS_EJES: dict[str, str] = {
     "tecnico": "Encaje técnico",
     "seniority": "Seniority",
@@ -197,6 +214,30 @@ def _coincide_estado(job: Job, estado: str) -> bool:
     return job.decision is not None and job.decision.estado == estado
 
 
+def _es_reciente(job: Job, antiguedad: str, momento: datetime) -> bool:
+    """Si la oferta entra en la ventana de antigüedad pedida.
+
+    Sin fecha de publicación se muestra siempre: no saber cuándo se publicó no es motivo
+    para esconderla, igual que `aplica_prefiltro()` no descarta ante la duda.
+
+    Un valor que no se entiende ("?antiguedad=pepe") también muestra todo. El formulario
+    sólo ofrece valores válidos, así que llegar con otra cosa es una URL escrita a mano, y
+    esconder ofertas por ello dejaría al usuario sin las ofertas y sin el motivo.
+
+    El instante se recibe y no se calcula aquí para que todas las ofertas de un listado se
+    midan contra el mismo reloj. Se llama `momento` y no `ahora` porque este módulo importa
+    `models.ahora`, que es una función: una local con ese nombre la taparía, y quien luego
+    escribiera `ahora()` dentro se llevaría un "datetime object is not callable".
+    """
+    if job.publicada_en is None:
+        return True
+    try:
+        dias = int(antiguedad)
+    except ValueError:
+        return True
+    return (momento - job.publicada_en).days <= dias
+
+
 def _ofertas_clasificadas(sesion: Session, *, fuente: str, categoria: str) -> list[Job]:
     consulta = (
         select(Job)
@@ -258,6 +299,7 @@ def listado(
     estado: str = Query(default=ESTADO_SIN_DECIDIR),
     q: str = Query(default=""),
     cerradas: str = Query(default=""),
+    antiguedad: str = Query(default=ANTIGUEDAD_POR_DEFECTO),
     sesion: Session = Depends(get_sesion),
 ) -> HTMLResponse:
     """Tablero agrupado por categoría, con filtros.
@@ -267,6 +309,10 @@ def listado(
     perdería el foco del campo de búsqueda a cada tecla.
     """
     candidatas = _ofertas_clasificadas(sesion, fuente=fuente, categoria=categoria)
+    # Un único instante para todo el listado: si cada oferta consultase el reloj, dos
+    # ofertas idénticas podrían caer a lados distintos del corte. Y `momento` en vez de
+    # `ahora` porque este módulo importa `models.ahora`, que es una función.
+    momento = datetime.now()
     visibles = [
         job
         for job in candidatas
@@ -276,6 +322,9 @@ def listado(
         # revisarlas es tiempo perdido. Se ocultan, no se borran, porque su recuento
         # es lo que dice qué fuente sirve enlaces muertos.
         and (cerradas == "si" or not job.cerrada)
+        # Una oferta de hace un año está casi siempre muerta y ocupa sitio. Se oculta, no
+        # se descarta: la decisión es del usuario y el desplegable la devuelve.
+        and _es_reciente(job, antiguedad, momento)
     ]
 
     historial = historial_por_empresa(sesion, visibles)
@@ -288,12 +337,14 @@ def listado(
         "total": len(filas),
         "fuentes": _fuentes(sesion),
         "categorias": [(c, ETIQUETAS_CATEGORIA[c]) for c in ORDEN_CATEGORIAS],
+        "opciones_antiguedad": OPCIONES_ANTIGUEDAD,
         "filtros": {
             "fuente": fuente,
             "categoria": categoria,
             "estado": estado,
             "q": q,
             "cerradas": cerradas,
+            "antiguedad": antiguedad,
         },
         "resumen": resumen_candidaturas(sesion),
     }
