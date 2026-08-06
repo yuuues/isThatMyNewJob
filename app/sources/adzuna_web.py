@@ -69,6 +69,16 @@ CABECERAS = {
 
 # El único Crawl-delay que Adzuna publica en su robots.txt (para bingbot) son 2
 # segundos. A falta de una cifra para nosotros, se usa la suya.
+#
+# Medido el 2026-08-06 en dos tandas reales: 40 fichas seguidas a este ritmo salieron
+# perfectas, 0 fallos. Pero 99 seguidas dieron 7 fallos —tres 403, dos 503 y dos
+# ReadTimeout—, o sea que el WAF se cansa de las ráfagas largas aunque se respete el
+# intervalo. Ninguno fue definitivo: las siete se reintentan solas en el run siguiente.
+#
+# La conclusión práctica no es subir este número, sino no subir
+# `adzuna_scrape_max_por_run` muy por encima de 40. Ese tope no está sólo para que el run
+# no se eternice: también reparte la carga entre días, que es lo que mantiene el ritmo
+# por debajo de lo que Adzuna tolera.
 INTERVALO_SEGUNDOS = 2.0
 
 # Adzuna deja de servir la ficha de una oferta retirada. No es un fallo transitorio: la
