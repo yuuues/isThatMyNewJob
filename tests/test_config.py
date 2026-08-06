@@ -29,6 +29,34 @@ def test_settings_tienen_valores_por_defecto(monkeypatch):
     assert settings.ruta_bd == "data/app.db"
 
 
+def test_los_ajustes_del_scraper_de_adzuna_tienen_valores_por_defecto(monkeypatch):
+    """El tope existe para que el paso no eternice el run, no para limitar reintentos:
+    de eso se encarga `intentos_scrape`.
+
+    `_env_file=None` y los `delenv` siguen el patrón del test de arriba: sin ellos esto
+    comprobaría el .env local en vez de los valores por defecto de la clase.
+    """
+    for variable in (
+        "ADZUNA_SCRAPE_ACTIVO",
+        "ADZUNA_SCRAPE_MAX_POR_RUN",
+        "ADZUNA_SCRAPE_TIMEOUT",
+    ):
+        monkeypatch.delenv(variable, raising=False)
+
+    settings = Settings(_env_file=None)
+
+    assert settings.adzuna_scrape_activo is True
+    assert settings.adzuna_scrape_max_por_run == 40
+    assert settings.adzuna_scrape_timeout == 30.0
+
+
+def test_el_scraper_de_adzuna_se_puede_apagar_desde_el_entorno(monkeypatch):
+    """Depende del HTML de un tercero: hay que poder apagarlo sin desplegar código."""
+    monkeypatch.setenv("ADZUNA_SCRAPE_ACTIVO", "0")
+
+    assert Settings(_env_file=None).adzuna_scrape_activo is False
+
+
 def test_el_env_local_no_influye_en_los_defaults_de_la_clase(monkeypatch):
     """Guardia del test de arriba: si vuelve a leerse el .env, esto lo detecta."""
     monkeypatch.setenv("PROVEEDOR_CLASIFICACION", "deepseek")

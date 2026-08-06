@@ -10,6 +10,18 @@ class Settings(BaseSettings):
     deepseek_api_key: str = ""
     adzuna_app_id: str = ""
     adzuna_app_key: str = ""
+
+    # La API de Adzuna corta las descripciones a 500 caracteres, así que la ficha pública
+    # se lee por HTTP para completarlas. Ver app/enrich.py y el spec del 2026-08-06.
+    #
+    # El interruptor existe porque esto depende del HTML de un tercero: si Adzuna cambia
+    # la maquetación, se apaga desde el .env sin tocar código ni desplegar.
+    adzuna_scrape_activo: bool = True
+    # Techo de duración del paso, no de reintentos: de eso se encarga `intentos_scrape`.
+    # A 2 s por petición son 80 segundos. Las cifras reales de ofertas nuevas por run van
+    # de 0 a 27, así que el atraso nunca desplaza a las ofertas del día.
+    adzuna_scrape_max_por_run: int = 40
+    adzuna_scrape_timeout: float = 30.0
     jsearch_api_key: str = ""
 
     proveedor_clasificacion: Literal["gemini", "deepseek"] = "gemini"
