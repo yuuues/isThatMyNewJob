@@ -44,3 +44,32 @@ def test_rawjob_acepta_fecha_de_publicacion():
     )
 
     assert job.publicada_en.year == 2026
+
+
+def test_los_ejes_incluyen_la_zona_y_es_obligatoria():
+    """El eje existe para que un descarte por ubicación sea distinguible de uno técnico.
+
+    Obligatorio y no opcional a propósito: si el modelo pudiera omitirlo, el eje se
+    quedaría vacío justo en las ofertas donde la zona es dudosa, que son las únicas
+    donde sirve de algo.
+    """
+    import pytest
+    from pydantic import ValidationError
+
+    from app.schemas import EjesEncaje
+
+    ejes = EjesEncaje(
+        tecnico="alto",
+        seniority="ok",
+        modalidad="remoto",
+        salario="no publicado",
+        sector="ok",
+        zona="Barcelona, dentro de las zonas aceptadas",
+    )
+    assert ejes.zona == "Barcelona, dentro de las zonas aceptadas"
+
+    with pytest.raises(ValidationError):
+        EjesEncaje(
+            tecnico="alto", seniority="ok", modalidad="remoto",
+            salario="no publicado", sector="ok",
+        )

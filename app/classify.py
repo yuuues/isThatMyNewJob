@@ -8,7 +8,13 @@ from app.schemas import PerfilCandidato, Preferencias, RawJob, ResultadoClasific
 # Dos causas medidas: la regla del salario se disparaba en casi todas las ofertas (en
 # España casi nadie lo publica) y las descripciones truncadas llevaban al modelo a
 # abstenerse en lugar de juzgar con lo visible.
-PROMPT_VERSION = 2
+#
+# v3: la regla 8. El campo `ubicacion` del agregador no es de fiar y falla siempre en la
+# misma dirección, dejando pasar: medido, 11 ofertas híbridas dicen "España" mientras su
+# texto nombra Madrid, Sevilla, Alicante, Burgos o Baleares, y otras 6 traen una provincia
+# que el texto contradice. El prefiltro no puede arreglarlo porque exime el ámbito
+# nacional a propósito, así que el juicio fino pasa aquí.
+PROMPT_VERSION = 3
 
 MAX_CARACTERES_DESCRIPCION = 6000
 
@@ -45,6 +51,12 @@ vacíos ni lenguaje de venta.
 7. En red_flags anota sólo señales objetivas presentes en el texto de la oferta \
 (ausencia de salario, requisitos desproporcionados, contrato precario, exigencias \
 incoherentes con el puesto). No especules sobre la empresa.
+8. El campo `Ubicación` lo da el agregador y a menudo es genérico ("España", "Remote") o \
+directamente erróneo. Deduce del TEXTO dónde se trabaja de verdad. Si el puesto es \
+presencial o híbrido y la ubicación real cae fuera de las zonas del candidato, la \
+categoría es "descartar" aunque el campo `Ubicación` diga otra cosa. En el eje `zona` \
+escribe qué ubicación has deducido y de dónde la has sacado; si el texto no da ninguna \
+pista, dilo y no descartes por ello.
 """
 
 

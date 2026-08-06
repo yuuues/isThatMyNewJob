@@ -86,6 +86,7 @@ ETIQUETAS_EJES: dict[str, str] = {
     "modalidad": "Modalidad",
     "salario": "Salario",
     "sector": "Sector",
+    "zona": "Zona",
 }
 
 # Cómo se lee en la fila un historial previo con la misma empresa. En segunda
@@ -314,7 +315,13 @@ def _fila_de(sesion: Session, job: Job) -> dict:
 
 
 def _ejes(clasificacion: Clasificacion | None) -> list[tuple[str, str]]:
-    """Los cinco ejes en orden fijo, más los que traiga de más una versión futura."""
+    """Los ejes conocidos en orden fijo, más los que traiga de más una versión futura.
+
+    Se dice "conocidos" y no un número porque el número cambia: nacieron cinco y con la
+    v3 del prompt son seis. Lo que no cambia es que sólo se pintan las claves presentes
+    en el JSON guardado, y eso es lo que permite que las clasificaciones emitidas antes
+    de un eje nuevo sigan mostrándose sin migrar nada.
+    """
     if clasificacion is None:
         return []
     ejes = clasificacion.ejes or {}

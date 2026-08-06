@@ -43,7 +43,8 @@ def resultado() -> ResultadoClasificacion:
         confianza="alta",
         razonamiento="Encaja con el perfil.",
         ejes=EjesEncaje(
-            tecnico="alto", seniority="correcto", modalidad="remoto", salario="por encima del mínimo", sector="ok"
+            tecnico="alto", seniority="correcto", modalidad="remoto",
+            salario="por encima del mínimo", sector="ok", zona="dentro de zona"
         ),
     )
 
@@ -236,3 +237,28 @@ def test_el_prompt_dice_que_el_salario_no_publicado_es_lo_normal():
 
 def test_el_prompt_define_la_confianza_sobre_la_decision_no_sobre_la_oferta():
     assert "lo seguro que estás de TU DECISIÓN" in PROMPT_SISTEMA
+
+
+def test_el_prompt_manda_deducir_la_ubicacion_del_texto():
+    """La regla que es todo el cambio.
+
+    El modelo ya recibía las zonas del candidato y ya tenía orden de descartar cuando se
+    incumple una preferencia, pero leía `Ubicación: España` en la ficha y no iba a buscar
+    la ciudad en el texto. Nadie se lo había pedido.
+    """
+    from app.classify import PROMPT_SISTEMA
+
+    minusculas = PROMPT_SISTEMA.lower()
+    assert "ubicación" in minusculas
+    assert "deduce" in minusculas or "deducir" in minusculas
+    assert "genérico" in minusculas or "generico" in minusculas
+
+
+def test_la_version_del_prompt_sube_al_cambiar_las_reglas():
+    """`prompt_version` se guarda en cada clasificación y se muestra en la ficha.
+
+    Sin subirla, dos veredictos emitidos con reglas distintas serían indistinguibles.
+    """
+    from app.classify import PROMPT_VERSION
+
+    assert PROMPT_VERSION == 3

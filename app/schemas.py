@@ -78,6 +78,11 @@ class EjesEncaje(BaseModel):
     modalidad: str
     salario: str
     sector: str
+    # El agregador da una `ubicacion` poco fiable: medido, 11 ofertas híbridas dicen
+    # "España" mientras su texto nombra Madrid, Sevilla o Alicante. El modelo deduce del
+    # texto dónde se trabaja y lo explica aquí, para que un descarte por zona no sea
+    # indistinguible de uno técnico. Ver la regla 8 de PROMPT_SISTEMA.
+    zona: str
 
 
 class ResultadoClasificacion(BaseModel):

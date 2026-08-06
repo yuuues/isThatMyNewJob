@@ -1,7 +1,7 @@
 """Detalle de una oferta y reclasificar.
 
 El detalle es donde se comprueba de qué se decidió: descripción completa,
-razonamiento, los cinco ejes, skills que faltan, red flags, y con qué modelo y
+razonamiento, los ejes de encaje, skills que faltan, red flags, y con qué modelo y
 versión de prompt se juzgó.
 
 Ningún test llama a un modelo de verdad: el proveedor se sustituye por
@@ -69,7 +69,8 @@ def resultado(categoria: str = "aplicar_ya", razonamiento: str = "Ahora sí enca
         confianza="alta",
         razonamiento=razonamiento,
         ejes=EjesEncaje(
-            tecnico="Python", seniority="Senior", modalidad="Remoto", salario="no publicado", sector="software"
+            tecnico="Python", seniority="Senior", modalidad="Remoto",
+            salario="no publicado", sector="software", zona="Barcelona"
         ),
         skills_faltantes=["Terraform"],
         red_flags=[],
@@ -270,3 +271,35 @@ def test_el_detalle_ofrece_el_boton_de_reclasificar(cliente: TestClient, crea_cl
 
     assert f'action="/job/{oferta.id}/reclasificar"' in html
     assert "Reclasificar" in html
+
+
+def test_la_ficha_pinta_el_eje_de_zona(cliente: TestClient, sesion, crea_clasificada):
+    """El eje sirve para que el descarte por ubicación sea auditable, y para eso hay que
+    verlo."""
+    oferta = crea_clasificada()
+    fila = clasificacion_de(sesion, oferta.id)
+    fila.ejes = {**EJES, "zona": "Alicante, fuera de las zonas aceptadas"}
+    sesion.commit()
+
+    html = cliente.get(f"/job/{oferta.id}").text
+
+    assert "Zona" in html
+    assert "Alicante, fuera de las zonas aceptadas" in html
+
+
+def test_una_clasificacion_sin_eje_de_zona_sigue_pintando(
+    cliente: TestClient, crea_clasificada
+):
+    """La regresión que protege a las 334 clasificaciones ya guardadas.
+
+    Ninguna tiene el eje `zona`, porque se emitieron antes de que existiera. `_ejes()`
+    sólo pinta las claves presentes, así que deben seguir mostrando sus cinco filas. Si
+    alguien lo cambiara por un acceso directo al campo, esto se pondría rojo.
+    """
+    oferta = crea_clasificada()
+
+    respuesta = cliente.get(f"/job/{oferta.id}")
+
+    assert respuesta.status_code == 200
+    for eje in EJES.values():
+        assert eje in respuesta.text
