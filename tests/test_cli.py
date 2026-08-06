@@ -1,10 +1,12 @@
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 
 from app import cli
 from app.cli import carga_semilla, construye_fuentes
 from app.config import Settings
-from app.db import crear_engine, crear_sesion
+from app.db import crear_engine, crear_sesion, crear_tablas
 from app.models import BusquedaGuardada, Perfil, PreferenciasRow
 from app.schemas import PerfilCandidato, Preferencias
 
@@ -73,6 +75,50 @@ def test_construye_enriquecedor_respeta_el_interruptor():
 
     assert construye_enriquecedor(apagado) is None
     assert callable(construye_enriquecedor(encendido))
+
+
+class EspiaRun:
+    """Doble de `ejecuta_run()`: se queda con los kwargs y no ejecuta el pipeline."""
+
+    def __init__(self):
+        self.kwargs = None
+
+    def __call__(self, sesion, **kwargs):
+        self.kwargs = kwargs
+        return SimpleNamespace(id=1, stats={}, errores=[])
+
+
+def siembra_una_busqueda_activa(ruta_bd) -> None:
+    """Sin ninguna búsqueda activa, el punto de entrada vuelve antes de llegar a
+    `ejecuta_run()` y el test pasaría sin comprobar nada."""
+    engine = crear_engine(str(ruta_bd))
+    crear_tablas(engine)
+    with crear_sesion(engine) as sesion:
+        sesion.add(BusquedaGuardada(nombre="php", texto="php", pais="es", fuentes=[]))
+        sesion.commit()
+
+
+def test_el_run_de_la_cli_cablea_el_enriquecedor_y_su_cupo(monkeypatch, tmp_path):
+    """El cableado es la mitad de la feature y no lo probaba nadie: quitar estos dos
+    argumentos dejaba el scraper en código muerto con la suite en verde.
+
+    El cupo se comprueba con un valor que NO es el de por defecto: con 40 a los dos
+    lados, olvidarse del parámetro daría el mismo resultado que pasarlo.
+    """
+    ruta_bd = tmp_path / "app.db"
+    monkeypatch.setenv("RUTA_BD", str(ruta_bd))
+    monkeypatch.setenv("ADZUNA_SCRAPE_ACTIVO", "1")
+    monkeypatch.setenv("ADZUNA_SCRAPE_MAX_POR_RUN", "7")
+    siembra_una_busqueda_activa(ruta_bd)
+    espia = EspiaRun()
+    monkeypatch.setattr(cli, "ejecuta_run", espia)
+    monkeypatch.setattr(cli, "crear_provider", lambda settings: "provider de mentira")
+    monkeypatch.setattr(cli, "construye_fuentes", lambda *args, **kwargs: [])
+
+    assert cli.comando_run(None) == 0
+
+    assert callable(espia.kwargs["enriquecedor"])
+    assert espia.kwargs["max_scrapes"] == 7
 
 
 class ArgsCv:
