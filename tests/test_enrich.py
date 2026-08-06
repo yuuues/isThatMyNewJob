@@ -292,7 +292,30 @@ def test_una_oferta_borrada_agota_los_intentos_de_una_vez(sesion):
     sesion.refresh(job)
     assert job.intentos_scrape == MAX_INTENTOS_SCRAPE
     assert resumen.agotadas == 1
+    assert resumen.fallos == [(job.id, "DescripcionNoDisponible: ya no existe")]
     assert pendientes_de_enriquecer(sesion, 10) == []
+
+
+def test_una_fila_heredada_con_intentos_a_null_no_revienta_al_fallar(sesion):
+    """El fallo que tumbaría un run entero, y que la suite no cubría.
+
+    En la base real, `asegura_esquema()` añade `intentos_scrape` sin valor por defecto:
+    las 138 filas anteriores a la columna la tienen a NULL. Un `job.intentos_scrape += 1`
+    a secas es `None + 1`, o sea `TypeError`, y se lanza DENTRO del `except`, donde no lo
+    captura nadie: se lleva por delante el run completo en la primera oferta del atraso
+    que falle. `crea_job()` no lo destapa porque el `default=0` del ORM da 0, nunca NULL.
+    """
+    job = crea_job(sesion, "1")
+    job.intentos_scrape = None
+    sesion.commit()
+
+    resumen = enriquece_descripciones(
+        sesion, scraper=scraper_que_falla(RuntimeError("timeout")), max_por_run=10
+    )
+
+    sesion.refresh(job)
+    assert job.intentos_scrape == 1
+    assert resumen.fallidas == 1
 
 
 def test_una_racha_de_fallos_corta_el_paso(sesion):
@@ -312,36 +335,67 @@ def test_una_racha_de_fallos_corta_el_paso(sesion):
     assert resumen.cortado_por == MOTIVO_RACHA
 
 
+def _scraper_por_guion(guion: list[str]):
+    """Un scraper que hace lo que diga el guión, oferta por oferta.
+
+    Las rachas hay que probarlas con secuencias concretas: un scraper que siempre falla
+    o siempre acierta no distingue "el contador se reinicia" de "el contador no existe".
+    """
+    paso = {"n": 0}
+
+    def scraper(url: str) -> str:
+        turno = guion[paso["n"]]
+        paso["n"] += 1
+        if turno == "exito":
+            return TEXTO_LARGO
+        if turno == "retirada":
+            raise DescripcionNoDisponible("ya no existe")
+        raise RuntimeError("timeout")
+
+    return scraper
+
+
 def test_las_ofertas_borradas_no_alimentan_la_racha(sesion):
     """Un 404 demuestra que el servidor contesta, que es lo contrario de lo que la racha
-    vigila. Drenar el atraso con seis ofertas retiradas seguidas es perfectamente
-    posible y no debe cortar nada."""
-    for i in range(6):
+    vigila. Drenar el atraso con ofertas retiradas seguidas no debe cortar nada.
+
+    La retirada va DESPUÉS de cuatro fallos, no antes, y ahí está toda la gracia. Con
+    seis retiradas seguidas el test pasaba por accidente y con las retiradas por delante
+    tampoco medía nada: la rama del 404 no incrementa el contador, así que quitarle el
+    reinicio da igual si el contador ya estaba a cero. Poniéndola en el quinto turno, con
+    la racha a cuatro, el reinicio decide: sin él la sexta oferta corta el paso.
+    """
+    for i in range(8):
         crea_job(sesion, str(i))
 
     resumen = enriquece_descripciones(
         sesion,
-        scraper=scraper_que_falla(DescripcionNoDisponible("ya no existe")),
-        max_por_run=10,
+        scraper=_scraper_por_guion(["fallo"] * 4 + ["retirada"] + ["fallo"] * 3),
+        max_por_run=8,
     )
 
-    assert resumen.intentadas == 6
+    assert resumen.intentadas == 8
+    assert resumen.agotadas == 1
+    assert resumen.fallidas == 7
     assert resumen.cortado_por is None
 
 
 def test_un_exito_reinicia_la_racha(sesion):
-    intentos = {"n": 0}
+    """Cuatro fallos, un éxito y tres fallos: ocho ofertas y ningún corte.
 
-    def scraper(url: str) -> str:
-        intentos["n"] += 1
-        if intentos["n"] % 2 == 0:
-            return TEXTO_LARGO
-        raise RuntimeError("timeout")
-
+    El guión es asimétrico a propósito. Alternando fallo y éxito nunca se juntan más de
+    dos fallos, así que el reinicio no llega a ser determinante y el test pasa igual sin
+    él. Aquí, sin el reinicio, el contador seguiría desde cuatro y cortaría en la sexta.
+    """
     for i in range(8):
         crea_job(sesion, str(i))
 
-    resumen = enriquece_descripciones(sesion, scraper=scraper, max_por_run=8)
+    resumen = enriquece_descripciones(
+        sesion,
+        scraper=_scraper_por_guion(["fallo"] * 4 + ["exito"] + ["fallo"] * 3),
+        max_por_run=8,
+    )
 
-    assert resumen.cortado_por is None
     assert resumen.intentadas == 8
+    assert resumen.completadas == 1
+    assert resumen.cortado_por is None
