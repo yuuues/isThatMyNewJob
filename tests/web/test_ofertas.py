@@ -9,7 +9,7 @@ monta `tests/web/conftest.py` y no interviene ningún proveedor.
 """
 
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -124,23 +124,30 @@ def test_dentro_de_un_grupo_la_confianza_alta_va_primero(cliente: TestClient, cr
     )
 
 
+# Las fechas de los tests son relativas a hoy y no absolutas: con un filtro por
+# antigüedad en el listado, una fecha fija se va quedando vieja sola y el test empieza a
+# fallar un día cualquiera sin que nadie haya tocado nada.
+def _hace(dias: int) -> datetime:
+    return datetime.now() - timedelta(days=dias)
+
+
 def test_a_igual_confianza_manda_la_fecha_mas_reciente(cliente: TestClient, crea_clasificada):
-    crea_clasificada(titulo="Publicada en enero", publicada_en=datetime(2026, 1, 15))
-    crea_clasificada(titulo="Publicada en julio", publicada_en=datetime(2026, 7, 15))
+    crea_clasificada(titulo="Publicada hace mucho", publicada_en=_hace(60))
+    crea_clasificada(titulo="Publicada hace poco", publicada_en=_hace(2))
 
     html = cliente.get("/").text
 
-    assert posicion(html, "Publicada en julio") < posicion(html, "Publicada en enero")
+    assert posicion(html, "Publicada hace poco") < posicion(html, "Publicada hace mucho")
 
 
 def test_una_oferta_sin_fecha_no_adelanta_a_una_reciente(cliente: TestClient, crea_clasificada):
     """Sin fecha va al final, no al principio: `None` no es 'recién publicada'."""
     crea_clasificada(titulo="Sin fecha conocida", publicada_en=None)
-    crea_clasificada(titulo="Publicada en julio", publicada_en=datetime(2026, 7, 15))
+    crea_clasificada(titulo="Publicada hace poco", publicada_en=_hace(2))
 
     html = cliente.get("/").text
 
-    assert posicion(html, "Publicada en julio") < posicion(html, "Sin fecha conocida")
+    assert posicion(html, "Publicada hace poco") < posicion(html, "Sin fecha conocida")
 
 
 def test_una_oferta_truncada_lleva_marca_y_una_completa_no(cliente: TestClient, crea_clasificada):
