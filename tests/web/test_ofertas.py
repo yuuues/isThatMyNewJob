@@ -343,3 +343,75 @@ def test_la_lista_vacia_lo_dice_en_vez_de_quedarse_en_blanco(cliente: TestClient
     html = cliente.get("/").text
 
     assert "No hay ofertas" in html
+
+
+def test_por_defecto_se_ocultan_las_publicadas_hace_mas_de_tres_meses(
+    cliente: TestClient, crea_clasificada
+):
+    """33 ofertas de más de seis meses seguían en la lista como si fueran actuales.
+
+    El caso real: tres de la misma consultora, de junio, agosto y octubre de 2025, que
+    además estaban cerradas en origen.
+    """
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+    crea_clasificada(titulo="Oferta fresca", publicada_en=_hace(10))
+
+    html = cliente.get("/").text
+
+    assert "Oferta fresca" in html
+    assert "Oferta rancia" not in html
+
+
+def test_se_pueden_pedir_las_de_cualquier_fecha(cliente: TestClient, crea_clasificada):
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+
+    html = cliente.get("/?antiguedad=todas").text
+
+    assert "Oferta rancia" in html
+
+
+def test_una_oferta_sin_fecha_se_ve_con_cualquier_umbral(
+    cliente: TestClient, crea_clasificada
+):
+    """No saber cuándo se publicó no es motivo para esconderla.
+
+    Mismo principio que `aplica_prefiltro()`: ante la duda, no se descarta. Son 2 de 434
+    ofertas reales y todas de JSearch.
+    """
+    crea_clasificada(titulo="Sin fecha conocida", publicada_en=None)
+
+    assert "Sin fecha conocida" in cliente.get("/?antiguedad=30").text
+
+
+def test_el_desplegable_recuerda_lo_elegido(cliente: TestClient, crea_clasificada):
+    crea_clasificada(titulo="Oferta fresca", publicada_en=_hace(10))
+
+    html = cliente.get("/?antiguedad=todas").text
+
+    assert re.search(r'<option value="todas"[^>]*selected', html)
+
+
+def test_el_filtro_de_antiguedad_se_combina_con_el_de_cerradas(
+    cliente: TestClient, crea_clasificada
+):
+    """Los filtros se suman, no se pisan: reciente y cerrada sigue oculta."""
+    crea_clasificada(titulo="Fresca pero cerrada", publicada_en=_hace(10), cerrada=True)
+    crea_clasificada(titulo="Fresca y viva", publicada_en=_hace(10))
+
+    html = cliente.get("/").text
+
+    assert "Fresca y viva" in html
+    assert "Fresca pero cerrada" not in html
+
+
+def test_un_umbral_que_no_se_entiende_no_esconde_nada(
+    cliente: TestClient, crea_clasificada
+):
+    """El formulario sólo ofrece valores válidos, así que esto es una URL escrita a mano.
+
+    Esconder ofertas por un parámetro que no se entiende sería lo peor que puede hacer:
+    el usuario no vería ni el motivo ni las ofertas.
+    """
+    crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
+
+    assert "Oferta rancia" in cliente.get("/?antiguedad=pepe").text
