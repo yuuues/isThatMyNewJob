@@ -114,25 +114,6 @@ def test_la_plantilla_base_enlaza_pico_antes_que_estilo():
     assert posicion_pico < posicion_estilo
 
 
-def test_la_plantilla_base_no_carga_nada_de_fuera():
-    """Ni CDN ni fuentes externas: la herramienta tiene que funcionar sin red.
-
-    Se miran los ORÍGENES de las etiquetas que cargan recursos, no el texto del
-    fichero. Buscar `https://` a pelo era lo que hacía antes este test, y desde que
-    el pie enlaza a GitHub, a la página del autor y a Liberapay eso daría un falso
-    positivo: un <a> no carga nada, lo sigue el usuario si quiere. Un <script src>
-    o un <link href> contra un CDN sí, y son los que dejarían la herramienta
-    dependiendo de la red.
-    """
-    contenido = BASE_HTML.read_text(encoding="utf-8")
-
-    for etiqueta in re.findall(r"<(?:script|link|img|iframe)\b[^>]*>", contenido):
-        for url in re.findall(r'(?:src|href)\s*=\s*"([^"]*)"', etiqueta):
-            assert not url.startswith(("http://", "https://", "//")), (
-                f"{etiqueta.strip()} carga algo de fuera"
-            )
-
-
 def test_la_pagina_carga_pico_desde_local(cliente: TestClient):
     assert "/static/pico.min.css" in cliente.get("/").text
 
@@ -190,19 +171,12 @@ def test_la_pagina_no_carga_nada_de_fuera(cliente: TestClient):
     ofertas originales (`<a href="https://...">`) sí son externos y deben serlo.
     """
     recursos = re.findall(
-        r'<(?:script|link|img)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
+        r'<(?:script|link|img|iframe)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
     )
 
     assert recursos, "la página no carga ningún recurso: el test no está comprobando nada"
     externos = [r for r in recursos if r.startswith(("http://", "https://", "//"))]
     assert externos == []
-
-
-def test_la_plantilla_base_no_contiene_ninguna_url_externa():
-    contenido = BASE_HTML.read_text(encoding="utf-8")
-
-    assert "http://" not in contenido
-    assert "https://" not in contenido
 
 
 def test_la_plantilla_base_enlaza_las_cinco_vistas():
