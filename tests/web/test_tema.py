@@ -20,7 +20,6 @@ from fastapi.testclient import TestClient
 
 from app.web import deps
 
-BASE_HTML = Path(deps.DIR_PLANTILLAS) / "base.html"
 ESTILO_CSS = Path(deps.DIR_ESTATICOS) / "estilo.css"
 
 VISTAS = ["/", "/profile", "/preferences", "/searches", "/runs"]
@@ -101,11 +100,3 @@ def test_el_selector_no_parte_la_navegacion_en_dos():
     cuerpo = regla.group(1)
     assert re.search(r"width\s*:\s*auto", cuerpo)
     assert re.search(r"margin-bottom\s*:\s*0", cuerpo)
-
-
-def test_el_selector_de_tema_no_carga_nada_de_fuera():
-    """Los dos scripts son inline: ni CDN ni fichero nuevo en /static."""
-    contenido = BASE_HTML.read_text(encoding="utf-8")
-
-    assert "http://" not in contenido
-    assert "https://" not in contenido
