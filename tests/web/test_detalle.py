@@ -69,7 +69,8 @@ def resultado(categoria: str = "aplicar_ya", razonamiento: str = "Ahora sí enca
         confianza="alta",
         razonamiento=razonamiento,
         ejes=EjesEncaje(
-            tecnico="Python", seniority="Senior", modalidad="Remoto", salario="no publicado", sector="software"
+            tecnico="Python", seniority="Senior", modalidad="Remoto",
+            salario="no publicado", sector="software", zona="Barcelona"
         ),
         skills_faltantes=["Terraform"],
         red_flags=[],

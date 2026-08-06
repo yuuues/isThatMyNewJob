@@ -46,7 +46,8 @@ def veredicto(categoria: str = "aplicar_ya") -> ResultadoClasificacion:
         confianza="alta",
         razonamiento="Encaja.",
         ejes=EjesEncaje(
-            tecnico="alto", seniority="ok", modalidad="remoto", salario="no publicado", sector="ok"
+            tecnico="alto", seniority="ok", modalidad="remoto",
+            salario="no publicado", sector="ok", zona="dentro de zona"
         ),
     )
 

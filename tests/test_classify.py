@@ -43,7 +43,8 @@ def resultado() -> ResultadoClasificacion:
         confianza="alta",
         razonamiento="Encaja con el perfil.",
         ejes=EjesEncaje(
-            tecnico="alto", seniority="correcto", modalidad="remoto", salario="por encima del mínimo", sector="ok"
+            tecnico="alto", seniority="correcto", modalidad="remoto",
+            salario="por encima del mínimo", sector="ok", zona="dentro de zona"
         ),
     )
 
