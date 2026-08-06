@@ -62,6 +62,19 @@ def test_adzuna_se_construye_cuando_hay_credenciales():
     assert [f.nombre for f in fuentes] == ["adzuna"]
 
 
+def test_construye_enriquecedor_respeta_el_interruptor():
+    """Devolver None es lo mismo que no pasar el parámetro: el interruptor del .env y el
+    valor por defecto de `ejecuta_run()` son la misma cosa vista desde los dos lados."""
+    from app.cli import construye_enriquecedor
+    from app.config import Settings
+
+    apagado = Settings(_env_file=None, adzuna_scrape_activo=False)
+    encendido = Settings(_env_file=None, adzuna_scrape_activo=True)
+
+    assert construye_enriquecedor(apagado) is None
+    assert callable(construye_enriquecedor(encendido))
+
+
 class ArgsCv:
     def __init__(self, pdf):
         self.pdf = str(pdf)
