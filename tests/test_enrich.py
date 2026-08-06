@@ -2,8 +2,15 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from app.enrich import MAX_INTENTOS_SCRAPE, enriquece_descripciones, pendientes_de_enriquecer
+from app.enrich import (
+    MAX_FALLOS_SEGUIDOS,
+    MAX_INTENTOS_SCRAPE,
+    MOTIVO_RACHA,
+    enriquece_descripciones,
+    pendientes_de_enriquecer,
+)
 from app.models import Clasificacion, Decision, Job
+from app.sources.adzuna_web import DescripcionNoDisponible
 
 
 def crea_job(sesion, external_id="1", **kwargs) -> Job:
@@ -235,3 +242,106 @@ def test_el_tope_por_run_llega_hasta_la_consulta(sesion):
     resumen = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=2)
 
     assert resumen.intentadas == 2
+
+
+def scraper_que_falla(error):
+    def scraper(url: str) -> str:
+        raise error
+
+    return scraper
+
+
+def test_un_fallo_suma_un_intento_y_deja_la_oferta_truncada(sesion):
+    job = crea_job(sesion, "1")
+
+    resumen = enriquece_descripciones(
+        sesion, scraper=scraper_que_falla(RuntimeError("timeout")), max_por_run=10
+    )
+
+    sesion.refresh(job)
+    assert job.intentos_scrape == 1
+    assert job.descripcion_truncada is True
+    assert resumen.fallidas == 1
+    assert resumen.fallos == [(job.id, "RuntimeError: timeout")]
+
+
+def test_un_fallo_no_toca_la_clasificacion_existente(sesion):
+    """Si no hemos podido mejorar el dato, no hay motivo para tirar el veredicto."""
+    job = crea_job(sesion, "1", estado_clasificacion="clasificada")
+    crea_clasificacion(sesion, job)
+
+    enriquece_descripciones(
+        sesion, scraper=scraper_que_falla(RuntimeError("timeout")), max_por_run=10
+    )
+
+    sesion.refresh(job)
+    assert job.estado_clasificacion == "clasificada"
+    assert sesion.scalar(select(Clasificacion).where(Clasificacion.job_id == job.id)) is not None
+
+
+def test_una_oferta_borrada_agota_los_intentos_de_una_vez(sesion):
+    """Reintentar tres runs para confirmar que algo borrado sigue borrado es tirar cupo."""
+    job = crea_job(sesion, "1")
+
+    resumen = enriquece_descripciones(
+        sesion,
+        scraper=scraper_que_falla(DescripcionNoDisponible("ya no existe")),
+        max_por_run=10,
+    )
+
+    sesion.refresh(job)
+    assert job.intentos_scrape == MAX_INTENTOS_SCRAPE
+    assert resumen.agotadas == 1
+    assert pendientes_de_enriquecer(sesion, 10) == []
+
+
+def test_una_racha_de_fallos_corta_el_paso(sesion):
+    """Circuit breaker, en el espíritu del CuotaAgotadaError de pipeline.py.
+
+    El día que Adzuna cambie el WAF y devuelva 403 a todo, sin este corte un run quemaría
+    el cupo entero y tres runs bastarían para dar por perdido todo el atraso.
+    """
+    for i in range(10):
+        crea_job(sesion, str(i))
+
+    resumen = enriquece_descripciones(
+        sesion, scraper=scraper_que_falla(RuntimeError("403")), max_por_run=10
+    )
+
+    assert resumen.intentadas == MAX_FALLOS_SEGUIDOS
+    assert resumen.cortado_por == MOTIVO_RACHA
+
+
+def test_las_ofertas_borradas_no_alimentan_la_racha(sesion):
+    """Un 404 demuestra que el servidor contesta, que es lo contrario de lo que la racha
+    vigila. Drenar el atraso con seis ofertas retiradas seguidas es perfectamente
+    posible y no debe cortar nada."""
+    for i in range(6):
+        crea_job(sesion, str(i))
+
+    resumen = enriquece_descripciones(
+        sesion,
+        scraper=scraper_que_falla(DescripcionNoDisponible("ya no existe")),
+        max_por_run=10,
+    )
+
+    assert resumen.intentadas == 6
+    assert resumen.cortado_por is None
+
+
+def test_un_exito_reinicia_la_racha(sesion):
+    intentos = {"n": 0}
+
+    def scraper(url: str) -> str:
+        intentos["n"] += 1
+        if intentos["n"] % 2 == 0:
+            return TEXTO_LARGO
+        raise RuntimeError("timeout")
+
+    for i in range(8):
+        crea_job(sesion, str(i))
+
+    resumen = enriquece_descripciones(sesion, scraper=scraper, max_por_run=8)
+
+    assert resumen.cortado_por is None
+    assert resumen.intentadas == 8

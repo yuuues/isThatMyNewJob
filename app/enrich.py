@@ -15,6 +15,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Clasificacion, Decision, Job
+from app.sources.adzuna_web import DescripcionNoDisponible
 from app.sources.comun import detecta_modalidad
 
 FUENTE = "adzuna"
@@ -22,6 +23,12 @@ FUENTE = "adzuna"
 # Mismo tope que `MAX_INTENTOS` de app/pipeline.py, y por el mismo motivo: una oferta
 # que falla tres veces deja de gastar peticiones pero sigue consultable.
 MAX_INTENTOS_SCRAPE = 3
+
+# Circuit breaker. El día que Adzuna cambie el WAF y devuelva 403 a todo, sin este corte
+# un run quemaría el cupo entero y en tres runs el atraso completo quedaría marcado como
+# definitivamente fallido por culpa de un bloqueo temporal.
+MAX_FALLOS_SEGUIDOS = 5
+MOTIVO_RACHA = "racha_de_fallos"
 
 
 @dataclass
@@ -109,11 +116,35 @@ def enriquece_descripciones(
     lleva por delante el trabajo ya hecho.
     """
     resumen = ResumenEnriquecimiento()
+    seguidos = 0
 
     for job in pendientes_de_enriquecer(sesion, max_por_run):
         resumen.intentadas += 1
-        texto = scraper(job.url)
 
+        try:
+            texto = scraper(job.url)
+        except DescripcionNoDisponible as e:
+            # La oferta se retiró. Es un fallo de ESTA oferta, no del sitio: el servidor
+            # contestó. Por eso agota sus intentos pero reinicia la racha, o drenar el
+            # atraso con cinco ofertas retiradas seguidas cortaría el paso sin motivo.
+            job.intentos_scrape = MAX_INTENTOS_SCRAPE
+            resumen.agotadas += 1
+            resumen.fallos.append((job.id, f"{type(e).__name__}: {e}"))
+            seguidos = 0
+            sesion.commit()
+            continue
+        except Exception as e:  # noqa: BLE001 - la oferta se reintenta en el run siguiente
+            job.intentos_scrape = (job.intentos_scrape or 0) + 1
+            resumen.fallidas += 1
+            resumen.fallos.append((job.id, f"{type(e).__name__}: {e}"))
+            seguidos += 1
+            sesion.commit()
+            if seguidos >= MAX_FALLOS_SEGUIDOS:
+                resumen.cortado_por = MOTIVO_RACHA
+                break
+            continue
+
+        seguidos = 0
         job.descripcion = texto
         job.descripcion_truncada = False
         job.modalidad = detecta_modalidad(f"{job.titulo} {texto}")
