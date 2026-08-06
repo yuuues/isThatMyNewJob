@@ -157,3 +157,20 @@ def test_un_run_guarda_estadisticas_y_errores(sesion):
 
     assert run.stats["remotive"]["nuevas"] == 4
     assert run.errores[0]["fuente"] == "adzuna"
+
+
+def test_una_oferta_nueva_arranca_sin_intentos_de_scrape(sesion):
+    """El contador nace a 0 para que el paso de enriquecimiento pueda contar fallos."""
+    job = Job(
+        fuente="adzuna",
+        external_id="1",
+        url="https://www.adzuna.es/details/1",
+        titulo="Backend",
+        empresa="Empresa",
+        descripcion="Texto",
+        hash_dedup="abc",
+    )
+    sesion.add(job)
+    sesion.commit()
+
+    assert job.intentos_scrape == 0

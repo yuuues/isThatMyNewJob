@@ -80,6 +80,11 @@ class Job(Base):
     cerrada: Mapped[bool] = mapped_column(default=False)
     cerrada_en: Mapped[datetime | None] = mapped_column(DateTime, default=None)
     intentos_clasificacion: Mapped[int] = mapped_column(Integer, default=0)
+    # Fallos del scraper de la ficha pública, para no reintentar eternamente una oferta
+    # que Adzuna ya borró. Ver app/enrich.py. Ojo: `asegura_esquema()` añade esta columna
+    # a las bases existentes SIN valor por defecto, así que las filas antiguas la tienen
+    # a NULL y no a 0. Quien la consulte en SQL debe contemplar el NULL.
+    intentos_scrape: Mapped[int] = mapped_column(Integer, default=0)
 
     clasificacion: Mapped["Clasificacion | None"] = relationship(
         back_populates="job", uselist=False
