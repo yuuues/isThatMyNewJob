@@ -8,7 +8,9 @@ from app.limitador import sin_espera
 from app.schemas import SearchQuery
 from app.sources.arbeitnow import URL_API, ArbeitnowSource
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "arbeitnow_sample.json").read_text())
+FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "arbeitnow_sample.json").read_text(encoding="utf-8")
+)
 
 
 class LimitadorEspia:
