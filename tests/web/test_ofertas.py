@@ -415,3 +415,19 @@ def test_un_umbral_que_no_se_entiende_no_esconde_nada(
     crea_clasificada(titulo="Oferta rancia", publicada_en=_hace(200))
 
     assert "Oferta rancia" in cliente.get("/?antiguedad=pepe").text
+
+
+def test_el_limite_es_inclusivo(cliente: TestClient, crea_clasificada):
+    """Una oferta de exactamente 90 días entra; una de 91 no.
+
+    Sin este test, `<=` y `<` son indistinguibles para la suite y el borde puede cambiar
+    de sitio sin que nada avise. No es que 90 frente a 91 le importe a nadie: es que un
+    off-by-one silencioso en un filtro es exactamente lo que nadie sale a buscar.
+    """
+    crea_clasificada(titulo="Justo en el limite", publicada_en=_hace(90))
+    crea_clasificada(titulo="Un dia pasada", publicada_en=_hace(91))
+
+    html = cliente.get("/").text
+
+    assert "Justo en el limite" in html
+    assert "Un dia pasada" not in html

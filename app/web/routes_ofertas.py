@@ -214,7 +214,7 @@ def _coincide_estado(job: Job, estado: str) -> bool:
     return job.decision is not None and job.decision.estado == estado
 
 
-def _es_reciente(job: Job, antiguedad: str, ahora: datetime) -> bool:
+def _es_reciente(job: Job, antiguedad: str, momento: datetime) -> bool:
     """Si la oferta entra en la ventana de antigüedad pedida.
 
     Sin fecha de publicación se muestra siempre: no saber cuándo se publicó no es motivo
@@ -223,6 +223,11 @@ def _es_reciente(job: Job, antiguedad: str, ahora: datetime) -> bool:
     Un valor que no se entiende ("?antiguedad=pepe") también muestra todo. El formulario
     sólo ofrece valores válidos, así que llegar con otra cosa es una URL escrita a mano, y
     esconder ofertas por ello dejaría al usuario sin las ofertas y sin el motivo.
+
+    El instante se recibe y no se calcula aquí para que todas las ofertas de un listado se
+    midan contra el mismo reloj. Se llama `momento` y no `ahora` porque este módulo importa
+    `models.ahora`, que es una función: una local con ese nombre la taparía, y quien luego
+    escribiera `ahora()` dentro se llevaría un "datetime object is not callable".
     """
     if job.publicada_en is None:
         return True
@@ -230,7 +235,7 @@ def _es_reciente(job: Job, antiguedad: str, ahora: datetime) -> bool:
         dias = int(antiguedad)
     except ValueError:
         return True
-    return (ahora - job.publicada_en).days <= dias
+    return (momento - job.publicada_en).days <= dias
 
 
 def _ofertas_clasificadas(sesion: Session, *, fuente: str, categoria: str) -> list[Job]:
@@ -304,7 +309,10 @@ def listado(
     perdería el foco del campo de búsqueda a cada tecla.
     """
     candidatas = _ofertas_clasificadas(sesion, fuente=fuente, categoria=categoria)
-    ahora = datetime.now()
+    # Un único instante para todo el listado: si cada oferta consultase el reloj, dos
+    # ofertas idénticas podrían caer a lados distintos del corte. Y `momento` en vez de
+    # `ahora` porque este módulo importa `models.ahora`, que es una función.
+    momento = datetime.now()
     visibles = [
         job
         for job in candidatas
@@ -316,7 +324,7 @@ def listado(
         and (cerradas == "si" or not job.cerrada)
         # Una oferta de hace un año está casi siempre muerta y ocupa sitio. Se oculta, no
         # se descarta: la decisión es del usuario y el desplegable la devuelve.
-        and _es_reciente(job, antiguedad, ahora)
+        and _es_reciente(job, antiguedad, momento)
     ]
 
     historial = historial_por_empresa(sesion, visibles)
