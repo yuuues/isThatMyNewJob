@@ -101,6 +101,12 @@ def _reevalua(sesion: Session, job: Job) -> bool:
     sesion.execute(delete(Clasificacion).where(Clasificacion.job_id == job.id))
     job.estado_clasificacion = "pendiente"
     job.motivo_regla = None
+    # Los intentos vuelven a cero por el mismo motivo que en `reintentar()` de
+    # app/web/routes_runs.py: sin eso, el pipeline ve la oferta agotada nada más sacarla
+    # de la cola y la devuelve al estado terminal sin llegar a intentarlo. Aquí sería
+    # peor que allí, porque la oferta se quedaría con el texto completo recién traído y
+    # sin usar, atascada en "error" hasta que alguien pulsara "reintentar" a mano.
+    job.intentos_clasificacion = 0
     return True
 
 

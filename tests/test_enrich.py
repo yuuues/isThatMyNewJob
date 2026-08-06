@@ -194,6 +194,28 @@ def test_no_resetea_una_oferta_que_el_usuario_ya_decidio(sesion):
     assert resumen.reevaluadas == 0
 
 
+def test_una_oferta_agotada_vuelve_a_la_cola_con_los_intentos_a_cero(sesion):
+    """Devolverla a "pendiente" sin resetear los intentos no la reabre: la entierra.
+
+    La selección no mira `estado_clasificacion`, así que una oferta que agotó los tres
+    intentos de clasificación sin que su descripción llegara a completarse sí entra en el
+    paso. Si vuelve a la cola con `intentos_clasificacion` en 3, el bucle del pipeline la
+    manda al estado terminal nada más sacarla, sin clasificarla ni una vez con el texto
+    completo: acabaría con la descripción entera traída y sin usar, atascada en "error"
+    hasta que alguien pulsara "reintentar" a mano. `reintentar()` en
+    app/web/routes_runs.py ya documenta esta misma trampa.
+    """
+    job = crea_job(
+        sesion, "1", estado_clasificacion="error", intentos_clasificacion=3
+    )
+
+    enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.estado_clasificacion == "pendiente"
+    assert job.intentos_clasificacion == 0
+
+
 def test_una_oferta_ya_enriquecida_no_vuelve_a_entrar(sesion):
     """El test que cierra la duda del bucle infinito.
 
