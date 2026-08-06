@@ -156,9 +156,16 @@ def descarga_descripcion(
     limitador = limitador or LimitadorPorHost(intervalo_por_defecto=INTERVALO_SEGUNDOS)
     limitador.espera_turno(ficha)
 
-    respuesta = httpx.get(
-        ficha, headers=CABECERAS, timeout=timeout, follow_redirects=True
-    )
+    try:
+        respuesta = httpx.get(
+            ficha, headers=CABECERAS, timeout=timeout, follow_redirects=True
+        )
+    except httpx.RequestError as e:
+        # Los fallos de transporte de httpx (ConnectTimeout, ConnectError, ReadTimeout)
+        # cuelgan de `httpx.HTTPError`, NO de `RuntimeError`. Sin esta traducción el
+        # docstring de arriba mentiría, y quien capturase `RuntimeError` fiándose de él
+        # se comería el timeout sin enterarse.
+        raise RuntimeError(f"No se pudo pedir la ficha de Adzuna {ficha}: {e!r}") from e
 
     if respuesta.status_code in _CODIGOS_DEFINITIVOS:
         raise DescripcionNoDisponible(

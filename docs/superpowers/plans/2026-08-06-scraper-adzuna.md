@@ -531,7 +531,17 @@ Expected: FAIL con `ImportError: cannot import name 'descarga_descripcion'`.
 
 - [ ] **Step 3: Añade la descarga**
 
-Añade a `app/sources/adzuna_web.py`, después de los `re.compile` y antes de la clase `DescripcionNoDisponible`:
+Primero los imports, que hasta ahora no hacían falta. Añádelos a los de arriba de `app/sources/adzuna_web.py`:
+
+```python
+import httpx
+
+from app.limitador import LimitadorPorHost
+```
+
+(La Task 3 los omitió a propósito: no se usaban, y un import sin uso es un error de linter.)
+
+Después, entre los `re.compile` y la clase `DescripcionNoDisponible`:
 
 ```python
 # Medido el 2026-08-06 contra /details/5812188567, caso por caso: httpx por defecto,

@@ -174,3 +174,36 @@ def test_pide_turno_al_limitador_con_la_url_ya_limpia():
     descarga_descripcion(f"{FICHA_URL}?utm_medium=api", limitador=espia)
 
     assert espia.turnos == [FICHA_URL]
+
+
+@respx.mock
+def test_sigue_las_redirecciones():
+    """Sin `follow_redirects`, un 301 acabaría en RuntimeError en vez de en el texto.
+
+    Adzuna redirige por cosas tan tontas como la barra final o http->https, y ninguna de
+    ellas significa que la oferta no exista.
+    """
+    respx.get(FICHA_URL).mock(
+        return_value=httpx.Response(301, headers={"Location": f"{FICHA_URL}/"})
+    )
+    respx.get(f"{FICHA_URL}/").mock(return_value=httpx.Response(200, text=FICHA))
+
+    texto = descarga_descripcion(FICHA_URL, limitador=sin_espera())
+
+    assert "experiencia en Python" in texto
+
+
+@respx.mock
+def test_un_fallo_de_red_sale_como_runtimeerror():
+    """El contrato del docstring tiene que ser cierto.
+
+    Las excepciones de transporte de httpx cuelgan de `httpx.HTTPError`, no de
+    `RuntimeError`. Si no se tradujeran aquí, quien capturase `RuntimeError` fiándose de
+    la documentación se comería el timeout sin enterarse.
+    """
+    respx.get(FICHA_URL).mock(side_effect=httpx.ConnectTimeout("agotado"))
+
+    with pytest.raises(RuntimeError) as fallo:
+        descarga_descripcion(FICHA_URL, limitador=sin_espera())
+
+    assert not isinstance(fallo.value, DescripcionNoDisponible)
