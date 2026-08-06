@@ -11,6 +11,8 @@ import re
 import pytest
 from fastapi.testclient import TestClient
 
+# Las cinco entradas del <nav>. La sexta vista que extiende base.html, /job/{id},
+# lleva parámetro y se comprueba aparte en test_los_creditos_en_el_detalle_de_la_oferta.
 VISTAS = ["/", "/profile", "/preferences", "/searches", "/runs"]
 
 # Texto visible y destino de cada enlace. El texto también es contrato: "Hecho por
@@ -23,8 +25,11 @@ ENLACES = [
 
 
 def _pie(html: str) -> str:
-    encontrado = re.search(r"<footer\b.*?</footer>", html, flags=re.DOTALL)
-    assert encontrado, "el documento no tiene <footer>"
+    # `class="container"` y no `<footer\b` a secas: `oferta.html` tiene su propio
+    # <footer> (el del botón «Reclasificar», dentro del <article>) que precede al de
+    # base.html en el documento, y una búsqueda no voraz se quedaría con ése.
+    encontrado = re.search(r'<footer class="container".*?</footer>', html, flags=re.DOTALL)
+    assert encontrado, "el documento no tiene el <footer> de base.html"
     return encontrado.group(0)
 
 
@@ -59,6 +64,21 @@ def test_los_creditos_no_filtran_la_url_de_la_vista(cliente: TestClient, destino
 def test_los_creditos_salen_en_todas_las_vistas(cliente: TestClient, vista):
     """Van en `base.html`, así que ninguna ruta tiene que acordarse de pasarlos."""
     respuesta = cliente.get(vista)
+
+    assert respuesta.status_code == 200
+    assert "https://github.com/yuuues/isThatMyNewJob" in _pie(respuesta.text)
+
+
+def test_los_creditos_en_el_detalle_de_la_oferta(cliente: TestClient, crea_oferta):
+    """`/job/{id}` es la única vista con un identificador en la URL.
+
+    Es precisamente la que motiva el `rel="noreferrer"` de arriba: es la que de
+    verdad tendría algo que filtrar por `Referer` si el pie no lo llevara. Va
+    aparte de VISTAS porque la ruta necesita una oferta creada, no una cadena fija.
+    """
+    oferta = crea_oferta()
+
+    respuesta = cliente.get(f"/job/{oferta.id}")
 
     assert respuesta.status_code == 200
     assert "https://github.com/yuuues/isThatMyNewJob" in _pie(respuesta.text)
