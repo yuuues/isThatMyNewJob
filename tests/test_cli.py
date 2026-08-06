@@ -230,3 +230,39 @@ def test_scrappa_necesita_clave_y_sesion(sesion):
     assert construye_fuentes(["scrappa"], con_clave, sesion=None) == []
     assert construye_fuentes(["scrappa"], Settings(scrappa_api_key=""), sesion=sesion) == []
     assert [f.nombre for f in construye_fuentes(["scrappa"], con_clave, sesion=sesion)] == ["scrappa"]
+
+
+def test_el_comando_reclasificar_marca_y_no_clasifica(monkeypatch, tmp_path, capsys):
+    """Marca y sale. Clasificar es trabajo del run, que ya respeta el tope y los fallos."""
+    from app import cli
+    from app.db import crear_engine, crear_sesion, crear_tablas
+    from app.models import Clasificacion, Job
+
+    ruta = tmp_path / "app.db"
+    monkeypatch.setenv("RUTA_BD", str(ruta))
+
+    engine = crear_engine(str(ruta))
+    crear_tablas(engine)
+    with crear_sesion(engine) as s:
+        job = Job(
+            fuente="adzuna", external_id="1", url="https://example.com/1",
+            titulo="Backend", empresa="Empresa", descripcion="Texto",
+            hash_dedup="h1", estado_clasificacion="clasificada",
+        )
+        s.add(job)
+        s.commit()
+        s.add(
+            Clasificacion(
+                job_id=job.id, categoria="aplicar_ya", confianza="alta",
+                razonamiento="…", ejes={}, modelo="deepseek-v4-flash", prompt_version=2,
+            )
+        )
+        s.commit()
+
+    assert cli.main(["reclasificar"]) == 0
+
+    salida = capsys.readouterr().out
+    assert "1" in salida
+
+    with crear_sesion(crear_engine(str(ruta))) as s:
+        assert s.get(Job, 1).estado_clasificacion == "pendiente"

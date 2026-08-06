@@ -226,6 +226,35 @@ def comando_run(args) -> int:
     return 0
 
 
+def comando_reclasificar(args) -> int:
+    """Devuelve a la cola las ofertas ya juzgadas. No las clasifica.
+
+    Se separa del run a propósito: marcar es instantáneo y barato, mientras que
+    clasificar cuesta dinero y tiempo. Verlas marcadas antes de lanzar el run da la
+    oportunidad de arrepentirse.
+    """
+    from app.reclasifica import marca_para_reclasificar
+
+    settings = get_settings()
+    engine = crear_engine(settings.ruta_bd)
+    crear_tablas(engine)
+
+    with crear_sesion(engine) as sesion:
+        marcadas = marca_para_reclasificar(
+            sesion, saltar_decididas=not args.incluir_decididas
+        )
+
+    tope = settings.max_clasificaciones_por_run
+    print(f"{marcadas} ofertas devueltas a la cola.")
+    if marcadas > tope:
+        print(
+            f"El tope por run es {tope}, así que harán falta "
+            f"{-(-marcadas // tope)} runs, o subir MAX_CLASIFICACIONES_POR_RUN."
+        )
+    print("Lanza 'python -m app.cli run' para que se clasifiquen.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="isthatmynewjob")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -240,6 +269,16 @@ def main(argv: list[str] | None = None) -> int:
 
     p_run = sub.add_parser("run", help="Ejecuta el pipeline completo")
     p_run.set_defaults(func=comando_run)
+
+    p_recl = sub.add_parser(
+        "reclasificar", help="Devuelve a la cola las ofertas ya juzgadas"
+    )
+    p_recl.add_argument(
+        "--incluir-decididas",
+        action="store_true",
+        help="Rehace también las ofertas sobre las que ya decidiste a mano",
+    )
+    p_recl.set_defaults(func=comando_reclasificar)
 
     args = parser.parse_args(argv)
     return args.func(args)
