@@ -769,7 +769,9 @@ Expected: el reparto por categoría, 327 de `deepseek-v4-flash` más 5 de `deeps
 python -m app.cli reclasificar
 ```
 
-Expected: unas 320 ofertas devueltas a la cola —las 334 menos las 15 decididas— y el aviso de que harán falta dos runs con el tope de 200.
+Expected: **unas 317 ofertas** devueltas a la cola —las 332 con veredicto menos las 15 decididas a mano— y el aviso de que harán falta dos runs con el tope de 200.
+
+Las 102 `descartada_por_regla` **no entran**, y es correcto: el prefiltro no cambia, así que volverían a descartarse igual.
 
 - [ ] **Step 4: Sube el tope y lanza el run**
 
@@ -818,4 +820,6 @@ Repasado el plan contra el spec:
 
 Nombres verificados como consistentes entre tareas: `EjesEncaje.zona`, `PROMPT_SISTEMA`, `PROMPT_VERSION`, `ETIQUETAS_EJES`, `marca_para_reclasificar`, `saltar_decididas`, `comando_reclasificar`.
 
-Un detalle que el spec no fijaba y aquí se decide: `marca_para_reclasificar()` selecciona por `estado_clasificacion != "pendiente"` en vez de por "tiene clasificación". Así entran también las `descartada_por_regla`, que no tienen fila en `classification` pero cuyo descarte pudo decidirse con la ubicación mala, y quedan fuera las que ya están en la cola.
+Un detalle que el spec no fijaba y aquí se decide: `marca_para_reclasificar()` selecciona por `estado_clasificacion == "clasificada"`, o sea sólo las que tienen un veredicto del modelo.
+
+**Corrección sobre la primera versión de este plan.** Decía seleccionar por `!= "pendiente"` para que entraran también las `descartada_por_regla`, "cuyo descarte pudo decidirse con la ubicación mala". Estaba mal razonado: este cambio **no toca `app/prefilter.py`**, así que esas 102 ofertas volverían a pasar por la misma regla con los mismos datos y saldrían descartadas otra vez. Idéntico resultado, cero beneficio, y un recuento inflado de 317 a 419 que hacía parecer el trabajo mayor de lo que es.
