@@ -1,4 +1,4 @@
-{# Plantilla madre de las cinco vistas.
+{# Plantilla madre de las seis vistas: las cinco del <nav> y el detalle de la oferta.
 
    Dos reglas que no hay que romper:
 
@@ -78,8 +78,30 @@
       {% endblock %}
     </main>
 
+    {# Dos párrafos y no una línea: con tres enlaces la línea única pasa de los cien
+       caracteres y envuelve por donde le toque, partiendo el aviso a media frase.
+
+       El `rel` va entero a propósito. Sin `noreferrer` el navegador manda la URL de
+       la vista actual —que en `/job/{id}` lleva el identificador de la oferta— como
+       cabecera `Referer` a GitHub, a yuuu.es y a Liberapay: justo lo que niega el
+       párrafo de arriba.
+
+       Son enlaces, no cargas: la regla 1 de esta plantilla sigue intacta y la
+       herramienta funciona igual sin red. Por eso tampoco hay iconos, que habría
+       que descargar y versionar. #}
     <footer class="container">
-      <small class="tenue">Herramienta local. Los datos no salen de esta máquina.</small>
+      <p><small class="tenue">Herramienta local. Los datos no salen de esta máquina.</small></p>
+      <p>
+        <small class="tenue">
+          <a href="https://github.com/yuuues/isThatMyNewJob" target="_blank" rel="noopener noreferrer">Código en GitHub</a>
+          ·
+          Hecho por Yuuu
+          ·
+          <a href="https://yuuu.es" target="_blank" rel="noopener noreferrer">yuuu.es</a>
+          ·
+          <a href="https://liberapay.com/YuuuES" target="_blank" rel="noopener noreferrer">Liberapay</a>
+        </small>
+      </p>
     </footer>
 
     {# Segunda mitad del selector: sincroniza el control con lo guardado y atiende los

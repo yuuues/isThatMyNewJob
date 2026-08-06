@@ -207,6 +207,12 @@ El comando sustituye el `CMD` de la imagen, así que la suite corre siempre con 
 planificador apagado. Ningún test llama a una API real ni a un LLM, ni escribe en
 `data/app.db`: los de la web usan SQLite en memoria y dobles de los proveedores.
 
+## Autor
+
+Hecho por Yuuu — <https://yuuu.es>.
+
+Si te sirve de algo, se agradece un café: <https://liberapay.com/YuuuES>.
+
 ## Licencia
 
 MIT. Ver [LICENSE](LICENSE).

@@ -171,19 +171,12 @@ def test_la_pagina_no_carga_nada_de_fuera(cliente: TestClient):
     ofertas originales (`<a href="https://...">`) sí son externos y deben serlo.
     """
     recursos = re.findall(
-        r'<(?:script|link|img)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
+        r'<(?:script|link|img|iframe)\b[^>]*?\b(?:src|href)="([^"]+)"', cliente.get("/").text
     )
 
     assert recursos, "la página no carga ningún recurso: el test no está comprobando nada"
     externos = [r for r in recursos if r.startswith(("http://", "https://", "//"))]
     assert externos == []
-
-
-def test_la_plantilla_base_no_contiene_ninguna_url_externa():
-    contenido = BASE_HTML.read_text(encoding="utf-8")
-
-    assert "http://" not in contenido
-    assert "https://" not in contenido
 
 
 def test_la_plantilla_base_enlaza_las_cinco_vistas():
