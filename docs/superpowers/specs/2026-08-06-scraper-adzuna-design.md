@@ -309,9 +309,14 @@ el día que Adzuna cambie el WAF y devuelva 403 a todo, un run quemaría 40 inte
 bastarían para marcar **el atraso entero** como permanentemente fallido por culpa de un bloqueo
 temporal.
 
-Riesgo residual aceptado: las cinco primeras ofertas de esa racha sí gastan intento. Se asume
-por simplicidad; distinguir fallos "de sitio" de fallos "de oferta" para no contarlos exigiría
-la clasificación por código de estado que ya se descartó arriba.
+**Un 404 no cuenta para la racha, la reinicia.** La racha existe para detectar que el sitio nos
+está rechazando, y un 404 demuestra justo lo contrario: el servidor contesta y nos dice algo
+cierto sobre esa oferta. Sin este matiz, drenar el atraso con cinco ofertas borradas seguidas
+—perfectamente posible— cortaría el paso sin que pasara nada malo.
+
+Riesgo residual aceptado: las cinco primeras ofertas de una racha real sí gastan intento. Se
+asume por simplicidad; afinar más exigiría la clasificación por código de estado que ya se
+descartó arriba.
 
 Cada fallo va a `run.errores` con la forma común que ya existe:
 
