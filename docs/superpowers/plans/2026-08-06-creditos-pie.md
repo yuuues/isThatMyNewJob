@@ -319,6 +319,25 @@ git commit -m "Añade los créditos al pie"
 
 ### Task 3: Apretar el hueco entre los dos párrafos del pie
 
+> **Saltada tras medirla: no hacía falta.** La premisa era falsa. `estilo.css` ya baja
+> `--pico-typography-spacing-vertical`, así que el margen de cada `<p>` es de 7,5px y no
+> de un espaciado completo. Medido en el navegador sobre la aplicación levantada:
+>
+> | | |
+> |---|---|
+> | Hueco entre las dos líneas | 8px |
+> | Alto de cada línea | 20px |
+> | Alto total del pie | 74px |
+>
+> Ocho píxeles sobre veinte de línea se leen como dos líneas del mismo bloque, que es
+> justo lo que se quería. A 375px de ancho la línea de créditos ocupa 338px de los 359
+> disponibles: entra entera, sin envolver ni cortarse. No se toca `estilo.css`.
+>
+> De paso quedó medido que la página SÍ desborda horizontalmente en móvil
+> (`scrollWidth` 617 contra `clientWidth` 375), pero por el `<ul>` del `<nav>` con el
+> selector de tema, que mide 542px. Es anterior a este cambio y ajeno a él: el `<footer>`
+> mide exactamente los 375px del viewport.
+
 Pico da a cada `<p>` un margen inferior de un espaciado tipográfico completo. Entre dos
 frases sueltas de pie eso se lee como un salto de sección, no como dos líneas del mismo
 bloque. Hay que **mirarlo** antes de tocar nada: si se ve bien, esta tarea se salta y se
