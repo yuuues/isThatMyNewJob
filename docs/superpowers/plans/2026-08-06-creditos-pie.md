@@ -140,6 +140,23 @@ git commit -m "Quita los dos controles de URL externa redundantes"
 
 ### Task 2: Los tres enlaces en el pie
 
+> **Corregida durante la ejecución, en dos puntos.** El fichero de test que se transcribe
+> abajo es el que se escribió primero; el resultado final lleva dos cosas más, ambas en
+> `f0f72f5`:
+>
+> 1. **Faltaba `/job/{id}`.** `VISTAS` lista las cinco entradas del `<nav>`, pero son
+>    seis las vistas que extienden `base.html`. Y la que faltaba es justo la que sostiene
+>    todo el argumento del `noreferrer`: es la única con un identificador en la URL, o
+>    sea la única que de verdad tendría algo que filtrar por `Referer`. Se le añadió
+>    `test_los_creditos_en_el_detalle_de_la_oferta`, con la fixture `crea_oferta` del
+>    `conftest.py` compartido: una oferta sin clasificar renderiza en 200 porque toda la
+>    sección de clasificación de `oferta.html` está detrás de `{% if fila.clasificacion %}`.
+> 2. **El helper `_pie()` estaba mal.** Buscaba `<footer\b.*?</footer>` de forma no voraz,
+>    y `oferta.html` tiene su propio `<footer>` semántico —el del botón «Reclasificar»,
+>    dentro del `<article>`— que aparece antes en el documento. Se ancló a
+>    `<footer class="container">`, que es la marca del de `base.html`. Con las cinco
+>    vistas simples el helper original funcionaba de casualidad.
+
 **Files:**
 - Create: `tests/web/test_pie.py`
 - Modify: `app/web/templates/base.html:81-83` (el `<footer>`)
