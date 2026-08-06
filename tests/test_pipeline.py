@@ -579,3 +579,99 @@ def test_los_fallos_del_enriquecimiento_quedan_registrados_en_el_run(sesion):
     assert fallo["fuente"] == "adzuna"
     assert "timeout" in fallo["error"]
     assert run.stats["_enriquecimiento"]["fallidas"] == 1
+
+
+def _oferta_del_atraso(sesion) -> Job:
+    """Una oferta de un run anterior: truncada y ya juzgada con el extracto."""
+    job = Job(
+        fuente="adzuna",
+        external_id="atraso",
+        url="https://www.adzuna.es/details/atraso",
+        titulo="Backend Developer",
+        empresa="Empresa",
+        ubicacion="Barcelona",
+        modalidad="desconocida",
+        descripcion="Buscamos desarrollador backend para el equipo…",
+        descripcion_truncada=True,
+        hash_dedup="hash-atraso",
+        estado_clasificacion="clasificada",
+    )
+    sesion.add(job)
+    sesion.commit()
+    sesion.add(
+        Clasificacion(
+            job_id=job.id,
+            categoria="revisar",
+            confianza="media",
+            razonamiento="Juzgada con el extracto de 500 caracteres.",
+            ejes={"tecnico": "ok", "seniority": "ok", "modalidad": "?", "salario": "?",
+                  "sector": "ok"},
+            modelo="deepseek-v4-flash",
+            prompt_version=1,
+        )
+    )
+    sesion.commit()
+    return job
+
+
+def test_una_oferta_del_atraso_se_reclasifica_en_el_mismo_run(sesion):
+    """El enriquecimiento va ANTES de cargar `pendientes`, no sólo antes del bucle.
+
+    La diferencia sólo se ve con una oferta que el reset devuelve a la cola. Para las
+    recién ingeridas da igual dónde se ponga la llamada: el identity map de SQLAlchemy
+    hace que `pendientes` y el paso compartan las mismas instancias, así que el prefiltro
+    ve la modalidad corregida en cualquiera de las dos posiciones.
+
+    Aquí no: una oferta que estaba en "clasificada" sólo entra en `pendientes` si el
+    reset ocurrió antes de la consulta. El spec lo fija —"se reclasifica en el bucle de
+    ese mismo run"— y sin este test mover la llamada tres líneas más abajo retrasaría un
+    día cada oferta del atraso sin que nadie se enterase.
+    """
+    prepara(sesion, Preferencias(modalidades=["remoto", "hibrido"], zonas=["barcelona"]))
+    provider = FakeProvider([veredicto("aplicar_ya")])
+    texto_completo = (
+        "Buscamos desarrollador backend para el equipo de plataforma. "
+        "El puesto es para nuestra oficina de Barcelona en formato Híbrido."
+    )
+    job = _oferta_del_atraso(sesion)
+
+    ejecuta_run(
+        sesion,
+        fuentes=[FakeSource([])],
+        queries=[SearchQuery(nombre="x", texto="backend")],
+        provider=provider,
+        enriquecedor=lambda url: texto_completo,
+    )
+
+    sesion.refresh(job)
+    assert job.modalidad == "hibrido"
+    assert job.estado_clasificacion == "clasificada"
+    assert job.clasificacion.categoria == "aplicar_ya"
+    assert len(provider.llamadas) == 1
+
+
+def test_el_tope_de_scrapes_llega_hasta_el_paso(sesion):
+    """`max_scrapes` es un passthrough, y su valor por defecto coincide con el de
+    `enriquece_descripciones`: sin pasar un valor distinto, ignorar el parámetro no lo
+    detectaría nadie y el run drenaría el atraso entero de una sentada."""
+    prepara(sesion)
+    truncadas = [
+        raw(
+            str(i),
+            fuente="adzuna",
+            url=f"https://www.adzuna.es/details/{i}",
+            descripcion_truncada=True,
+        )
+        for i in range(3)
+    ]
+
+    run = ejecuta_run(
+        sesion,
+        fuentes=[FakeSource(truncadas)],
+        queries=[SearchQuery(nombre="x", texto="backend")],
+        provider=FakeProvider([veredicto(), veredicto(), veredicto()]),
+        enriquecedor=lambda url: "Texto completo de la oferta, con todo el detalle.",
+        max_scrapes=1,
+    )
+
+    assert run.stats["_enriquecimiento"]["intentadas"] == 1
