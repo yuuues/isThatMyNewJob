@@ -8,16 +8,43 @@ Corre entre `ingesta()` y el bucle de clasificación, nunca después: el prefilt
 por modalidad, y la modalidad sólo es fiable con el texto completo.
 """
 
-from sqlalchemy import or_, select
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from sqlalchemy import delete, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Job
+from app.models import Clasificacion, Decision, Job
+from app.sources.comun import detecta_modalidad
 
 FUENTE = "adzuna"
 
 # Mismo tope que `MAX_INTENTOS` de app/pipeline.py, y por el mismo motivo: una oferta
 # que falla tres veces deja de gastar peticiones pero sigue consultable.
 MAX_INTENTOS_SCRAPE = 3
+
+
+@dataclass
+class ResumenEnriquecimiento:
+    """Lo que hizo el paso. `fallos` no va a `run.stats`: va a `run.errores`."""
+
+    intentadas: int = 0
+    completadas: int = 0
+    fallidas: int = 0
+    agotadas: int = 0
+    reevaluadas: int = 0
+    cortado_por: str | None = None
+    fallos: list[tuple[int, str]] = field(default_factory=list)
+
+    def a_stats(self) -> dict:
+        return {
+            "intentadas": self.intentadas,
+            "completadas": self.completadas,
+            "fallidas": self.fallidas,
+            "agotadas": self.agotadas,
+            "reevaluadas": self.reevaluadas,
+            "cortado_por": self.cortado_por,
+        }
 
 
 def pendientes_de_enriquecer(sesion: Session, limite: int) -> list[Job]:
@@ -48,3 +75,53 @@ def pendientes_de_enriquecer(sesion: Session, limite: int) -> list[Job]:
             .limit(limite)
         )
     )
+
+
+def _reevalua(sesion: Session, job: Job) -> bool:
+    """Devuelve la oferta a la cola para que se juzgue con el texto completo.
+
+    El veredicto viejo se borra en vez de archivarse: `Clasificacion` tiene `job_id`
+    único, y guardar historial pediría un cambio de modelo de datos para conservar una
+    opinión emitida sobre datos malos.
+
+    Las ofertas que el usuario ya decidió a mano se respetan. Comprobado antes de
+    escribir esto: borrar clasificaciones no rompe el few-shot, porque
+    `ejemplos_few_shot()` lee `Decision` y `Job` y nunca `Clasificacion`.
+    """
+    if sesion.scalar(select(Decision.id).where(Decision.job_id == job.id)) is not None:
+        return False
+
+    sesion.execute(delete(Clasificacion).where(Clasificacion.job_id == job.id))
+    job.estado_clasificacion = "pendiente"
+    job.motivo_regla = None
+    return True
+
+
+def enriquece_descripciones(
+    sesion: Session,
+    *,
+    scraper: Callable[[str], str],
+    max_por_run: int = 40,
+) -> ResumenEnriquecimiento:
+    """Completa las descripciones truncadas de Adzuna y devuelve esas ofertas a la cola.
+
+    El commit es por oferta, como en el bucle de clasificación: un fallo a mitad no se
+    lleva por delante el trabajo ya hecho.
+    """
+    resumen = ResumenEnriquecimiento()
+
+    for job in pendientes_de_enriquecer(sesion, max_por_run):
+        resumen.intentadas += 1
+        texto = scraper(job.url)
+
+        job.descripcion = texto
+        job.descripcion_truncada = False
+        job.modalidad = detecta_modalidad(f"{job.titulo} {texto}")
+        resumen.completadas += 1
+
+        if _reevalua(sesion, job):
+            resumen.reevaluadas += 1
+
+        sesion.commit()
+
+    return resumen

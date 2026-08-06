@@ -1,7 +1,9 @@
 from datetime import datetime
 
-from app.enrich import MAX_INTENTOS_SCRAPE, pendientes_de_enriquecer
-from app.models import Job
+from sqlalchemy import select
+
+from app.enrich import MAX_INTENTOS_SCRAPE, enriquece_descripciones, pendientes_de_enriquecer
+from app.models import Clasificacion, Decision, Job
 
 
 def crea_job(sesion, external_id="1", **kwargs) -> Job:
@@ -84,3 +86,117 @@ def test_empieza_por_lo_mas_recien_ingerido(sesion):
     crea_job(sesion, "z-nueva", ingerida_en=datetime(2026, 8, 6, 10, 0))
 
     assert [j.external_id for j in pendientes_de_enriquecer(sesion, 1)] == ["z-nueva"]
+
+
+TEXTO_LARGO = (
+    "Buscamos desarrollador backend con experiencia en Python.\n\n"
+    "El puesto es para nuestra oficina de Sevilla en formato Híbrido."
+)
+
+
+def scraper_que_devuelve(texto=TEXTO_LARGO):
+    def scraper(url: str) -> str:
+        return texto
+
+    return scraper
+
+
+def crea_clasificacion(sesion, job, categoria="revisar") -> Clasificacion:
+    fila = Clasificacion(
+        job_id=job.id,
+        categoria=categoria,
+        confianza="media",
+        razonamiento="Juzgada con el extracto de 500 caracteres.",
+        ejes={"tecnico": "ok", "seniority": "ok", "modalidad": "?", "salario": "?", "sector": "ok"},
+        modelo="deepseek-v4-flash",
+        prompt_version=1,
+    )
+    sesion.add(fila)
+    sesion.commit()
+    return fila
+
+
+def test_guarda_el_texto_completo_y_apaga_la_marca(sesion):
+    job = crea_job(sesion, "1")
+
+    resumen = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.descripcion == TEXTO_LARGO
+    assert job.descripcion_truncada is False
+    assert resumen.completadas == 1
+
+
+def test_recalcula_la_modalidad_con_el_texto_completo(sesion):
+    """El corazón del cambio.
+
+    La modalidad se dedujo del extracto de 500 caracteres, donde no se menciona, así que
+    la oferta quedó como "desconocida". Y la modalidad desconocida está exenta de la
+    regla de zona del prefiltro (app/prefilter.py:124), así que una oferta híbrida en
+    Sevilla se colaba entera hasta el clasificador.
+    """
+    job = crea_job(sesion, "1", modalidad="desconocida")
+
+    enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.modalidad == "hibrido"
+
+
+def test_devuelve_la_oferta_a_la_cola_y_borra_el_veredicto_viejo(sesion):
+    job = crea_job(sesion, "1", estado_clasificacion="clasificada")
+    crea_clasificacion(sesion, job)
+
+    resumen = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.estado_clasificacion == "pendiente"
+    assert sesion.scalar(select(Clasificacion).where(Clasificacion.job_id == job.id)) is None
+    assert resumen.reevaluadas == 1
+
+
+def test_una_descartada_por_regla_vuelve_a_la_cola_sin_motivo(sesion):
+    """Son las que más lo necesitan: su descarte se decidió con una modalidad inventada."""
+    job = crea_job(
+        sesion,
+        "1",
+        estado_clasificacion="descartada_por_regla",
+        motivo_regla="zona fuera de rango: Madrid",
+    )
+
+    enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.estado_clasificacion == "pendiente"
+    assert job.motivo_regla is None
+
+
+def test_no_resetea_una_oferta_que_el_usuario_ya_decidio(sesion):
+    """Reopinar sobre algo que ya cerró a mano no aporta nada y la reabre en la lista."""
+    job = crea_job(sesion, "1", estado_clasificacion="clasificada")
+    crea_clasificacion(sesion, job)
+    sesion.add(Decision(job_id=job.id, estado="descartada_por_mi", motivo="No me interesa"))
+    sesion.commit()
+
+    resumen = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    sesion.refresh(job)
+    assert job.descripcion == TEXTO_LARGO  # el texto sí se completa
+    assert job.estado_clasificacion == "clasificada"  # pero el veredicto se respeta
+    assert sesion.scalar(select(Clasificacion).where(Clasificacion.job_id == job.id)) is not None
+    assert resumen.reevaluadas == 0
+
+
+def test_una_oferta_ya_enriquecida_no_vuelve_a_entrar(sesion):
+    """El test que cierra la duda del bucle infinito.
+
+    El reset va atado al éxito del scrape, y lo primero que hace el éxito es apagar
+    `descripcion_truncada`, que es la condición de la selección. Segunda pasada: nada.
+    """
+    crea_job(sesion, "1")
+
+    primera = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+    segunda = enriquece_descripciones(sesion, scraper=scraper_que_devuelve(), max_por_run=10)
+
+    assert primera.completadas == 1
+    assert segunda.intentadas == 0
