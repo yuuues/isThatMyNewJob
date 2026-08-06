@@ -86,6 +86,7 @@ ETIQUETAS_EJES: dict[str, str] = {
     "modalidad": "Modalidad",
     "salario": "Salario",
     "sector": "Sector",
+    "zona": "Zona",
 }
 
 # Cómo se lee en la fila un historial previo con la misma empresa. En segunda
