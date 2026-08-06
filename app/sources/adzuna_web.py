@@ -24,6 +24,10 @@ import re
 from html import unescape
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
+
+from app.limitador import LimitadorPorHost
+
 # No codicioso a propósito: la ficha trae más <section> después (ofertas similares), y
 # sin el `?` la descripción se las tragaría hasta el último cierre de la página.
 #
@@ -50,6 +54,27 @@ _ETIQUETAS_DE_BLOQUE = re.compile(r"<br\s*/?>|</(?:p|div|li|h[1-6]|tr)>", re.I)
 _ETIQUETAS = re.compile(r"<[^>]+>")
 _ESPACIOS = re.compile(r"[ \t]{2,}")
 _LINEAS_VACIAS = re.compile(r"\n{3,}")
+
+
+# Medido el 2026-08-06 contra /details/5812188567, caso por caso: httpx por defecto,
+# 403. UA propio a secas, 403. UA de Chrome sin `Accept`, 403. UA propio CON `Accept` y
+# `Accept-Language`, 200. Al WAF de CloudFront no le importa quién dice ser el cliente,
+# le importa que mande estas dos cabeceras. Por eso nos identificamos con nuestro nombre
+# en vez de disfrazarnos de navegador: no hace falta y sería mentir sin ganar nada.
+CABECERAS = {
+    "User-Agent": "isThatMyNewJob/1.0 (uso personal; +kevin@kcsystem.es)",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+}
+
+# El único Crawl-delay que Adzuna publica en su robots.txt (para bingbot) son 2
+# segundos. A falta de una cifra para nosotros, se usa la suya.
+INTERVALO_SEGUNDOS = 2.0
+
+# Adzuna deja de servir la ficha de una oferta retirada. No es un fallo transitorio: la
+# oferta no va a volver, y reintentarla cada día sería gastar cupo en confirmar que algo
+# borrado sigue borrado.
+_CODIGOS_DEFINITIVOS = (404, 410)
 
 
 class DescripcionNoDisponible(Exception):
@@ -113,3 +138,38 @@ def extrae_descripcion(html: str) -> str:
         return texto
 
     raise RuntimeError("La ficha de Adzuna no trae ni adp-body ni JobPosting")
+
+
+def descarga_descripcion(
+    url: str,
+    *,
+    limitador: LimitadorPorHost | None = None,
+    timeout: float = 30.0,
+) -> str:
+    """Texto completo de la oferta cuya ficha vive en `url`.
+
+    Lanza `DescripcionNoDisponible` si la oferta ya no existe, y `RuntimeError` para
+    cualquier otro fallo, que sí es reintentable. La distinción la usa app/enrich.py
+    para decidir entre agotar los intentos de golpe o sumar uno.
+    """
+    ficha = url_ficha(url)
+    limitador = limitador or LimitadorPorHost(intervalo_por_defecto=INTERVALO_SEGUNDOS)
+    limitador.espera_turno(ficha)
+
+    respuesta = httpx.get(
+        ficha, headers=CABECERAS, timeout=timeout, follow_redirects=True
+    )
+
+    if respuesta.status_code in _CODIGOS_DEFINITIVOS:
+        raise DescripcionNoDisponible(
+            f"Adzuna ya no publica {ficha} (respondió {respuesta.status_code})"
+        )
+
+    try:
+        respuesta.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(
+            f"La ficha de Adzuna respondió {respuesta.status_code}: {respuesta.text[:200]}"
+        ) from e
+
+    return extrae_descripcion(respuesta.text)
