@@ -1,7 +1,7 @@
 """Detalle de una oferta y reclasificar.
 
 El detalle es donde se comprueba de qué se decidió: descripción completa,
-razonamiento, los cinco ejes, skills que faltan, red flags, y con qué modelo y
+razonamiento, los ejes de encaje, skills que faltan, red flags, y con qué modelo y
 versión de prompt se juzgó.
 
 Ningún test llama a un modelo de verdad: el proveedor se sustituye por
