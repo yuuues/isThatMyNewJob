@@ -84,7 +84,12 @@ class Job(Base):
     # que Adzuna ya borró. Ver app/enrich.py. Ojo: `asegura_esquema()` añade esta columna
     # a las bases existentes SIN valor por defecto, así que las filas antiguas la tienen
     # a NULL y no a 0. Quien la consulte en SQL debe contemplar el NULL.
-    intentos_scrape: Mapped[int] = mapped_column(Integer, default=0)
+    #
+    # Se declara opcional a propósito, y no es cosmética: `create_all()` la generaría
+    # NOT NULL y entonces el esquema de los tests no podría ni representar esas filas
+    # heredadas, que en la base real sí existen. El tipo opcional también obliga a
+    # quien la incremente a contemplar el None, porque `None + 1` revienta.
+    intentos_scrape: Mapped[int | None] = mapped_column(Integer, default=0)
 
     clasificacion: Mapped["Clasificacion | None"] = relationship(
         back_populates="job", uselist=False
