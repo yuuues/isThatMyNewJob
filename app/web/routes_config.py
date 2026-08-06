@@ -693,7 +693,7 @@ def _ejecuta_run_completo() -> None:
     hilos. Los importes van dentro para que este módulo se pueda importar sin tocar
     la base de datos ni cargar los SDK.
     """
-    from app.cli import _busquedas_activas, construye_fuentes
+    from app.cli import _busquedas_activas, construye_enriquecedor, construye_fuentes
     from app.config import get_settings
     from app.db import crear_engine, crear_sesion, crear_tablas
     from app.llm.factory import crear_provider
@@ -711,6 +711,8 @@ def _ejecuta_run_completo() -> None:
             fuentes=construye_fuentes(nombres_fuentes, settings, sesion),
             queries=queries,
             provider=crear_provider(settings),
+            enriquecedor=construye_enriquecedor(settings),
+            max_scrapes=settings.adzuna_scrape_max_por_run,
             max_clasificaciones=settings.max_clasificaciones_por_run,
         )
 

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.classify import PROMPT_VERSION, clasifica
+from app.enrich import enriquece_descripciones
 from app.feedback import ejemplos_few_shot
 from app.ingest import ingesta
 from app.llm.base import CuotaAgotadaError, LLMProvider
@@ -128,6 +129,8 @@ def ejecuta_run(
     fuentes: list,
     queries: list[SearchQuery],
     provider: LLMProvider,
+    enriquecedor: Callable[[str], str] | None = None,
+    max_scrapes: int = 40,
     max_clasificaciones: int = 200,
     reintentos: int = REINTENTOS,
     dormir: Callable[[float], None] = time.sleep,
@@ -141,6 +144,10 @@ def ejecuta_run(
     Si el proveedor avisa de cuota agotada se corta en seco: no se le hace ni una
     llamada más, la cola queda intacta para mañana y el run se cierra registrando el
     motivo. `dormir` se inyecta para que los tests no duerman de verdad.
+
+    `enriquecedor` completa las descripciones que Adzuna sirve truncadas antes de
+    prefiltrar. Es opcional para que los tests y cualquier punto de entrada que no lo
+    pase sigan funcionando igual.
     """
     cierra_runs_colgados(sesion)
 
@@ -153,6 +160,20 @@ def ejecuta_run(
 
     stats = ingesta(sesion, fuentes, queries)
     errores: list[dict] = _errores_de_ingesta(stats)
+
+    # Va aquí y no después del prefiltro: la modalidad se deduce de la descripción, el
+    # prefiltro decide por modalidad, y con el extracto de 500 caracteres de Adzuna esa
+    # deducción sale "desconocida" tres de cada cuatro veces. Enriquecer después sería
+    # arreglar el dato justo cuando ya no sirve para nada.
+    if enriquecedor is not None:
+        resumen = enriquece_descripciones(
+            sesion, scraper=enriquecedor, max_por_run=max_scrapes
+        )
+        stats["_enriquecimiento"] = resumen.a_stats()
+        errores.extend(
+            _error("enriquecimiento", fuente="adzuna", job_id=job_id, error=mensaje)
+            for job_id, mensaje in resumen.fallos
+        )
 
     pendientes = sesion.scalars(
         select(Job).where(Job.estado_clasificacion == "pendiente").order_by(Job.ingerida_en)

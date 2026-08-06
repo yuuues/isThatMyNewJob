@@ -8,16 +8,20 @@ Tres cosas que este fichero vigila y que no son opcionales:
 - **El botón no lanza dos runs seguidos.** El aviso legal de Remotive pide un
   máximo aproximado de cuatro peticiones diarias.
 - **El run no bloquea la petición HTTP.**
+- **El run del botón es el mismo que el de la CLI.** Lo que se cablee en uno y no en
+  el otro deja media funcionalidad muerta sin que nadie se entere.
 """
 
 import threading
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.cli import _busquedas_activas
+from app.db import crear_engine, crear_sesion, crear_tablas
 from app.models import BusquedaGuardada, Run
 from app.config import get_settings
 from app.web import routes_config
@@ -315,6 +319,45 @@ def test_lanzar_en_segundo_plano_no_bloquea_la_peticion():
     puerta.set()
     hilo.join(timeout=5)
     assert terminado.is_set()
+
+
+def test_el_run_del_boton_cablea_el_enriquecedor_y_su_cupo(monkeypatch, tmp_path):
+    """El botón lanza el run de verdad, y nadie lo ejecutaba en la suite: los demás
+    tests sustituyen el lanzador por un doble, a propósito. Eso dejaba el cableado del
+    scraper de Adzuna sin cubrir por este lado, que es la mitad de la feature.
+
+    Aquí se llama a `_ejecuta_run_completo()` en directo, con todo lo que sale fuera
+    (base de datos, proveedor y fuentes) sustituido. El cupo se comprueba con un valor
+    que NO es el de por defecto: con 40 a los dos lados, olvidar el parámetro daría el
+    mismo resultado que pasarlo.
+    """
+    ruta_bd = tmp_path / "app.db"
+    monkeypatch.setenv("RUTA_BD", str(ruta_bd))
+    monkeypatch.setenv("ADZUNA_SCRAPE_ACTIVO", "1")
+    monkeypatch.setenv("ADZUNA_SCRAPE_MAX_POR_RUN", "7")
+
+    engine = crear_engine(str(ruta_bd))
+    crear_tablas(engine)
+    with crear_sesion(engine) as sesion_semilla:
+        sesion_semilla.add(BusquedaGuardada(nombre="php", texto="php", fuentes=[]))
+        sesion_semilla.commit()
+
+    kwargs_vistos = {}
+
+    def espia(sesion, **kwargs):
+        kwargs_vistos.update(kwargs)
+        return SimpleNamespace(id=1, stats={}, errores=[])
+
+    # Los importes de `_ejecuta_run_completo()` son diferidos: se resuelven al llamarla,
+    # así que sustituir el atributo del módulo de origen basta y sobra.
+    monkeypatch.setattr("app.pipeline.ejecuta_run", espia)
+    monkeypatch.setattr("app.llm.factory.crear_provider", lambda settings: "de mentira")
+    monkeypatch.setattr("app.cli.construye_fuentes", lambda *args, **kw: [])
+
+    routes_config._ejecuta_run_completo()
+
+    assert callable(kwargs_vistos["enriquecedor"])
+    assert kwargs_vistos["max_scrapes"] == 7
 
 
 def test_el_lanzador_por_defecto_no_se_construye_al_resolver_la_dependencia():

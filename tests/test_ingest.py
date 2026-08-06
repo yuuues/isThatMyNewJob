@@ -16,10 +16,10 @@ from app.sources.remotive import URL_API as URL_REMOTIVE
 from app.sources.remotive import RemotiveSource
 
 FIXTURE_REMOTIVE = json.loads(
-    (Path(__file__).parent / "fixtures" / "remotive_sample.json").read_text()
+    (Path(__file__).parent / "fixtures" / "remotive_sample.json").read_text(encoding="utf-8")
 )
 FIXTURE_ADZUNA = json.loads(
-    (Path(__file__).parent / "fixtures" / "adzuna_sample.json").read_text()
+    (Path(__file__).parent / "fixtures" / "adzuna_sample.json").read_text(encoding="utf-8")
 )
 
 

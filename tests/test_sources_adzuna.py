@@ -9,7 +9,14 @@ from app.limitador import sin_espera
 from app.schemas import SearchQuery
 from app.sources.adzuna import AdzunaSource, detecta_modalidad, url_api
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "adzuna_sample.json").read_text())
+# El `encoding` es obligatorio, no cosmético: `read_text()` a secas usa la codificación
+# del locale, que en Windows es cp1252. Los fixtures llevan "…" y acentos, y al leerlos
+# como cp1252 el carácter se parte en tres, de modo que `_esta_truncada()` deja de
+# reconocer el corte de Adzuna y el test de descripciones truncadas falla. Sólo pasaba
+# en máquinas con PYTHONUTF8=1, así que el fallo parecía intermitente y ajeno.
+FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "adzuna_sample.json").read_text(encoding="utf-8")
+)
 
 
 class LimitadorEspia:

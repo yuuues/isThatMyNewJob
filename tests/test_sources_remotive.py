@@ -9,7 +9,9 @@ from app.limitador import sin_espera
 from app.schemas import SearchQuery
 from app.sources.remotive import URL_API, RemotiveSource
 
-FIXTURE = json.loads((Path(__file__).parent / "fixtures" / "remotive_sample.json").read_text())
+FIXTURE = json.loads(
+    (Path(__file__).parent / "fixtures" / "remotive_sample.json").read_text(encoding="utf-8")
+)
 
 
 class LimitadorEspia:

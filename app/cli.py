@@ -1,5 +1,6 @@
 import argparse
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import yaml
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import crear_engine, crear_sesion, crear_tablas
+from app.limitador import LimitadorPorHost
 from app.llm.factory import crear_provider
 from app.models import BusquedaGuardada, PreferenciasRow
 from app.pipeline import ejecuta_run
@@ -112,6 +114,31 @@ def construye_fuentes(
     return fuentes
 
 
+def construye_enriquecedor(settings: Settings) -> Callable[[str], str] | None:
+    """El lector de fichas de Adzuna, o None si está apagado.
+
+    Devolver None es lo mismo que no pasar el parámetro a `ejecuta_run()`: el
+    interruptor de configuración y el valor por defecto del pipeline son la misma cosa
+    vista desde los dos lados.
+
+    El limitador es propio y por host: `www.adzuna.es` no es `api.adzuna.com`, así que
+    no compite con el de la API.
+    """
+    if not settings.adzuna_scrape_activo:
+        return None
+
+    from app.sources.adzuna_web import INTERVALO_SEGUNDOS, descarga_descripcion
+
+    limitador = LimitadorPorHost(intervalo_por_defecto=INTERVALO_SEGUNDOS)
+
+    def enriquecedor(url: str) -> str:
+        return descarga_descripcion(
+            url, limitador=limitador, timeout=settings.adzuna_scrape_timeout
+        )
+
+    return enriquecedor
+
+
 def _busquedas_activas(sesion: Session) -> tuple[list[SearchQuery], list[str]]:
     filas = sesion.scalars(select(BusquedaGuardada).where(BusquedaGuardada.activa)).all()
     queries = [
@@ -189,6 +216,8 @@ def comando_run(args) -> int:
             fuentes=construye_fuentes(nombres_fuentes, settings, sesion),
             queries=queries,
             provider=crear_provider(settings),
+            enriquecedor=construye_enriquecedor(settings),
+            max_scrapes=settings.adzuna_scrape_max_por_run,
             max_clasificaciones=settings.max_clasificaciones_por_run,
         )
         print(f"Run {run.id}: {run.stats.get('_totales')}")
