@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.sources.adzuna_web import DescripcionNoDisponible, extrae_descripcion
+from app.sources.adzuna_web import DescripcionNoDisponible, extrae_descripcion, html_a_texto
 
 FIXTURES = Path(__file__).parent / "fixtures"
 FICHA = (FIXTURES / "adzuna_ficha.html").read_text(encoding="utf-8")
@@ -31,7 +31,20 @@ def test_conserva_la_estructura_en_saltos_de_linea():
 
     assert "Requisitos:" in texto
     assert "\n" in texto
-    assert "  " not in texto  # nada de dobles espacios sueltos
+
+
+def test_colapsa_los_espacios_que_dejan_las_etiquetas_inline():
+    """Las etiquetas de bloque las limpia el strip por línea; éstas no.
+
+    Este test existe porque el de arriba llevaba un `assert "  " not in texto` que no
+    medía nada: en la ficha de ejemplo, todo espacio sobrante nace al principio o al
+    final de una línea y el strip lo barre solo, así que la aserción pasaba igual
+    borrando `_ESPACIOS`. El caso que de verdad necesita esa limpieza es el de varias
+    etiquetas inline seguidas en mitad de un párrafo, y aquí se ejerce directamente.
+    """
+    texto = html_a_texto("<p>Requiere <strong>SQL</strong> y <strong>Docker</strong></p>")
+
+    assert texto == "Requiere SQL y Docker"
 
 
 def test_traduce_las_entidades_html():

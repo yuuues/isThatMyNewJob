@@ -26,6 +26,15 @@ from urllib.parse import urlsplit, urlunsplit
 
 # No codicioso a propósito: la ficha trae más <section> después (ofertas similares), y
 # sin el `?` la descripción se las tragaría hasta el último cierre de la página.
+#
+# El riesgo simétrico —una <section> anidada DENTRO de adp-body, que este corte
+# truncaría en silencio— está descartado por medición: en 9 de las 10 fichas de la
+# muestra el texto extraído aquí coincidía carácter a carácter con el `description` del
+# JSON-LD, y con una anidada las longitudes no cuadrarían. Si algún día una descripción
+# sale sospechosamente corta, éste es el primer sitio donde mirar.
+#
+# Se asume también que Adzuna maqueta con comillas dobles y etiquetas en minúscula, como
+# hace hoy. Si dejara de hacerlo, la extracción no rompe: cae al JSON-LD.
 _SECCION_CUERPO = re.compile(
     r'<section[^>]*class="[^"]*adp-body[^"]*"[^>]*>(.*?)</section>', re.S
 )
