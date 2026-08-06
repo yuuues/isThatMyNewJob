@@ -60,6 +60,24 @@ Los tres enlaces lo llevan entero.
 - `noopener` es la higiene habitual de `_blank`, y va de todas formas implícito en
   `noreferrer`; se escribe explícito para que se lea la intención.
 
+## Un test existente que hay que estrechar
+
+`tests/web/test_tema.py` cierra con `test_el_selector_de_tema_no_carga_nada_de_fuera`,
+que afirma que la cadena `https://` no aparece en `base.html`. Con tres enlaces externos
+en el pie, ese test falla.
+
+La afirmación era demasiado ancha para lo que quería decir. Lo que hay que garantizar es
+que la plantilla no **carga** nada de fuera: un `<script src>`, un `<link href>` o un
+`<img>` contra un CDN. Un `<a href>` no carga nada; lo sigue el usuario si quiere, y
+seguirlo requiere la red que la herramienta no necesita para funcionar.
+
+Así que el test pasa a mirar los `src` y `href` de las etiquetas que cargan recursos
+—`script`, `link`, `img`, `iframe`— en vez de buscar la cadena a pelo. Y se muda a
+`tests/web/test_arranque.py`, que es donde ya vive el contrato de los estáticos de
+`base.html` (el orden de Pico y `estilo.css`, y el "Pico no trae URLs externas"). En
+`test_tema.py` sólo estaba porque el selector de tema fue quien metió los dos scripts
+en línea; una vez generalizado, ya no es un test del tema.
+
 ## Tests
 
 Fichero nuevo `tests/web/test_pie.py`, siguiendo el patrón de `tests/web/test_tema.py`
@@ -86,4 +104,6 @@ sería un enlace a sí mismo.
 | `app/web/templates/base.html` | Segundo párrafo en el `<footer>` con los tres enlaces |
 | `app/web/static/estilo.css` | Sólo si el hueco entre los dos párrafos queda mal |
 | `tests/web/test_pie.py` | Nuevo |
+| `tests/web/test_tema.py` | Se le quita el test de "no carga nada de fuera" |
+| `tests/web/test_arranque.py` | Recibe ese test, estrechado a las etiquetas que cargan |
 | `README.md` | Sección `## Autor` |
