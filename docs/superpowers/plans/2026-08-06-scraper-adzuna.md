@@ -94,8 +94,19 @@ En `app/models.py`, justo después de la línea `intentos_clasificacion: Mapped[
     # que Adzuna ya borró. Ver app/enrich.py. Ojo: `asegura_esquema()` añade esta columna
     # a las bases existentes SIN valor por defecto, así que las filas antiguas la tienen
     # a NULL y no a 0. Quien la consulte en SQL debe contemplar el NULL.
-    intentos_scrape: Mapped[int] = mapped_column(Integer, default=0)
+    #
+    # Se declara opcional a propósito, y no es cosmética: `create_all()` la generaría
+    # NOT NULL y entonces el esquema de los tests no podría ni representar esas filas
+    # heredadas, que en la base real sí existen. El tipo opcional también obliga a
+    # quien la incremente a contemplar el None, porque `None + 1` revienta.
+    intentos_scrape: Mapped[int | None] = mapped_column(Integer, default=0)
 ```
+
+**El tipo opcional es obligatorio, no una preferencia.** Con `Mapped[int]`, `create_all()`
+—que es lo que usa el fixture `sesion` de los tests— genera la columna `NOT NULL`, mientras
+que `asegura_esquema()` la añade nullable a la base real. Dos esquemas divergentes, y el de
+los tests incapaz de representar las 138 filas del atraso: el test del NULL de la Task 5
+fallaría con `IntegrityError` en vez de comprobar nada.
 
 - [ ] **Step 4: Ejecuta el test y comprueba que pasa**
 
@@ -702,11 +713,18 @@ def test_respeta_el_tope(sesion):
 
 def test_empieza_por_lo_mas_recien_ingerido(sesion):
     """Con 136 de atraso y un tope de 40, el orden ascendente haría que las ofertas de
-    hoy —las que se van a clasificar en este mismo run— esperasen cuatro días."""
-    crea_job(sesion, "vieja", ingerida_en=datetime(2026, 8, 1, 10, 0))
-    crea_job(sesion, "nueva", ingerida_en=datetime(2026, 8, 6, 10, 0))
+    hoy —las que se van a clasificar en este mismo run— esperasen cuatro días.
 
-    assert [j.external_id for j in pendientes_de_enriquecer(sesion, 1)] == ["nueva"]
+    Los `external_id` van a contrapelo del orden esperado a propósito. Con "vieja" y
+    "nueva" el test pasaba también SIN `order_by`: el filtro por fuente hace que SQLite
+    recorra el índice de `UniqueConstraint("fuente", "external_id")`, que devuelve
+    "nueva" primero por puro orden alfabético. La aserción se apoyaba en el orden
+    incidental de un índice en vez de en la cláusula que dice comprobar.
+    """
+    crea_job(sesion, "a-vieja", ingerida_en=datetime(2026, 8, 1, 10, 0))
+    crea_job(sesion, "z-nueva", ingerida_en=datetime(2026, 8, 6, 10, 0))
+
+    assert [j.external_id for j in pendientes_de_enriquecer(sesion, 1)] == ["z-nueva"]
 ```
 
 - [ ] **Step 2: Ejecuta los tests y comprueba que fallan**

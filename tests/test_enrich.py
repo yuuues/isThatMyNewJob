@@ -72,8 +72,15 @@ def test_respeta_el_tope(sesion):
 
 def test_empieza_por_lo_mas_recien_ingerido(sesion):
     """Con 136 de atraso y un tope de 40, el orden ascendente haría que las ofertas de
-    hoy —las que se van a clasificar en este mismo run— esperasen cuatro días."""
-    crea_job(sesion, "vieja", ingerida_en=datetime(2026, 8, 1, 10, 0))
-    crea_job(sesion, "nueva", ingerida_en=datetime(2026, 8, 6, 10, 0))
+    hoy —las que se van a clasificar en este mismo run— esperasen cuatro días.
 
-    assert [j.external_id for j in pendientes_de_enriquecer(sesion, 1)] == ["nueva"]
+    Los `external_id` van a contrapelo del orden esperado a propósito. Con "vieja" y
+    "nueva" el test pasaba también SIN `order_by`: el filtro por fuente hace que SQLite
+    recorra el índice de `UniqueConstraint("fuente", "external_id")`, que devuelve
+    "nueva" primero por puro orden alfabético. La aserción se apoyaba en el orden
+    incidental de un índice en vez de en la cláusula que dice comprobar.
+    """
+    crea_job(sesion, "a-vieja", ingerida_en=datetime(2026, 8, 1, 10, 0))
+    crea_job(sesion, "z-nueva", ingerida_en=datetime(2026, 8, 6, 10, 0))
+
+    assert [j.external_id for j in pendientes_de_enriquecer(sesion, 1)] == ["z-nueva"]
