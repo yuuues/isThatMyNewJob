@@ -477,3 +477,105 @@ def test_el_run_queda_registrado_en_la_tabla(sesion):
     )
 
     assert len(sesion.scalars(select(Run)).all()) == 1
+
+
+# --- Enriquecimiento de las descripciones truncadas de Adzuna ------------------
+
+
+def test_sin_enriquecedor_el_run_funciona_igual_que_antes(sesion):
+    """El parámetro es opcional a propósito: los tests y los puntos de entrada que no
+    lo pasen siguen funcionando."""
+    prepara(sesion)
+
+    run = ejecuta_run(
+        sesion,
+        fuentes=[FakeSource([raw("1")])],
+        queries=[SearchQuery(nombre="x", texto="backend")],
+        provider=FakeProvider([veredicto()]),
+    )
+
+    assert "_enriquecimiento" not in run.stats
+
+
+def test_el_enriquecimiento_corrige_la_modalidad_antes_del_prefiltro(sesion):
+    """El test que es el spec entero en una línea.
+
+    La API de Adzuna corta a 500 caracteres, así que la modalidad se dedujo de un
+    extracto que no la menciona y la oferta quedó como "desconocida". Y la modalidad
+    desconocida está EXENTA de la regla de zona (app/prefilter.py:124), de modo que una
+    oferta híbrida en Sevilla se cuela hasta el clasificador aunque las zonas aceptadas
+    sean otras.
+
+    Con el paso, la modalidad pasa a "hibrido", la regla de zona por fin se evalúa y la
+    oferta se descarta sin gastar una llamada al LLM. El sentido de la flecha es el
+    contrario del que parece: el paso no rescata ofertas del prefiltro, hace que el
+    prefiltro funcione.
+    """
+    prepara(sesion, Preferencias(modalidades=["remoto", "hibrido"], zonas=["barcelona"]))
+    provider = FakeProvider([veredicto()])
+    texto_completo = (
+        "Buscamos desarrollador backend para el equipo de plataforma. "
+        "El puesto es para nuestra oficina de Sevilla en formato Híbrido."
+    )
+
+    run = ejecuta_run(
+        sesion,
+        fuentes=[
+            FakeSource(
+                [
+                    raw(
+                        "1",
+                        fuente="adzuna",
+                        url="https://www.adzuna.es/details/1",
+                        ubicacion="Sevilla",
+                        modalidad="desconocida",
+                        descripcion="Buscamos desarrollador backend para el equipo…",
+                        descripcion_truncada=True,
+                    )
+                ]
+            )
+        ],
+        queries=[SearchQuery(nombre="x", texto="backend")],
+        provider=provider,
+        enriquecedor=lambda url: texto_completo,
+    )
+
+    job = sesion.scalar(select(Job))
+    assert job.modalidad == "hibrido"
+    assert job.descripcion == texto_completo
+    assert job.descripcion_truncada is False
+    assert job.estado_clasificacion == "descartada_por_regla"
+    assert "Sevilla" in job.motivo_regla
+    assert provider.llamadas == []
+    assert run.stats["_enriquecimiento"]["completadas"] == 1
+
+
+def test_los_fallos_del_enriquecimiento_quedan_registrados_en_el_run(sesion):
+    prepara(sesion)
+
+    def scraper_roto(url: str) -> str:
+        raise RuntimeError("timeout")
+
+    run = ejecuta_run(
+        sesion,
+        fuentes=[
+            FakeSource(
+                [
+                    raw(
+                        "1",
+                        fuente="adzuna",
+                        url="https://www.adzuna.es/details/1",
+                        descripcion_truncada=True,
+                    )
+                ]
+            )
+        ],
+        queries=[SearchQuery(nombre="x", texto="backend")],
+        provider=FakeProvider([veredicto()]),
+        enriquecedor=scraper_roto,
+    )
+
+    fallo = next(e for e in run.errores if e["tipo"] == "enriquecimiento")
+    assert fallo["fuente"] == "adzuna"
+    assert "timeout" in fallo["error"]
+    assert run.stats["_enriquecimiento"]["fallidas"] == 1
