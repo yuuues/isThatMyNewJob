@@ -369,3 +369,54 @@ def test_el_lanzador_por_defecto_no_se_construye_al_resolver_la_dependencia():
     lanzador = get_lanzador_run()
 
     assert callable(lanzador)
+
+
+def test_scrappa_se_puede_marcar_y_no_se_pierde_al_guardar(cliente, sesion):
+    """La regresión que costó fuentes en silencio.
+
+    `FUENTES_DISPONIBLES` no sólo dibuja los checkboxes: `_solo_conocidos()` la usa para
+    filtrar lo que se guarda. Scrappa se añadió al proyecto y no a esa tupla, así que
+    editar cualquier búsqueda desde la web le borraba Scrappa —la fuente con las mejores
+    descripciones— sin decir nada.
+    """
+    sesion.add(
+        BusquedaGuardada(
+            nombre="Con scrappa", texto="php", pais="es",
+            fuentes=["scrappa", "adzuna"], activa=True,
+        )
+    )
+    sesion.commit()
+    fila = sesion.scalars(select(BusquedaGuardada)).one()
+
+    respuesta = cliente.post(
+        f"/searches/{fila.id}",
+        data={"nombre": "Con scrappa", "texto": "php", "pais": "es",
+              "fuentes": ["scrappa", "adzuna"], "activa": "on"},
+    )
+
+    assert respuesta.status_code in (200, 303)
+    sesion.expire_all()
+    assert "scrappa" in sesion.scalars(select(BusquedaGuardada)).one().fuentes
+
+
+def test_el_formulario_ofrece_scrappa(cliente):
+    html = cliente.get("/searches").text
+
+    assert 'value="scrappa"' in html
+
+
+def test_el_panel_de_cupos_cuenta_scrappa_y_no_dice_que_es_gratis(cliente, sesion):
+    """El texto afirmaba que las demás fuentes no gastaban créditos. Falso desde que se
+    añadió Scrappa, que tiene cupo mensual con límite duro igual que JSearch."""
+    sesion.add(
+        BusquedaGuardada(
+            nombre="Con scrappa", texto="php", pais="es",
+            fuentes=["scrappa"], activa=True,
+        )
+    )
+    sesion.commit()
+
+    html = cliente.get("/searches").text
+
+    assert "Scrappa" in html
+    assert "(Adzuna, Remotive, Arbeitnow) no gastan créditos" not in html
