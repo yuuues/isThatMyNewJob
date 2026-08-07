@@ -39,7 +39,7 @@
   <label for="fuente-{{ sufijo }}-{{ fuente }}">
     <input type="checkbox" id="fuente-{{ sufijo }}-{{ fuente }}" name="fuentes" value="{{ fuente }}"
            {% if fuente in datos.fuentes %}checked{% endif %} />
-    {{ fuente }}{% if fuente == "jsearch" %} <small>— gasta créditos del cupo mensual</small>{% endif %}
+    {{ fuente }}{% if fuente in fuentes_con_cupo %} <small>— gasta créditos del cupo mensual</small>{% endif %}
   </label>
   {% endfor %}
 </fieldset>
@@ -64,23 +64,25 @@
 {% if aviso %}<p><mark>{{ aviso }}</mark></p>{% endif %}
 
 <article>
-  <header><strong>Coste comprometido en JSearch</strong></header>
+  <header><strong>Cupos comprometidos</strong></header>
+  {% for coste in costes %}
   <p>
-    Las búsquedas activas que usan JSearch gastan
+    Las búsquedas activas que usan <strong>{{ coste.fuente }}</strong> gastan
     <strong>{{ coste.por_run }}</strong> créditos por ejecución. Con una ejecución diaria
     son <strong>{{ coste.al_mes }}</strong> al mes sobre un cupo de
     <strong>{{ coste.limite }}</strong>, contando {{ coste.runs_al_mes }} runs al mes.
     {% if coste.excede %}
     <mark>
-      Eso pasa del cupo: JSearch dejará de responder antes de fin de mes y sus ofertas
-      desaparecerán sin aviso. Desactiva alguna búsqueda o quítale JSearch.
+      Eso pasa del cupo: {{ coste.fuente }} dejará de responder antes de fin de mes y sus
+      ofertas desaparecerán sin aviso. Desactiva alguna búsqueda o quítale {{ coste.fuente }}.
     </mark>
     {% endif %}
   </p>
+  {% endfor %}
   <p>
     <small>
-      Las demás fuentes (Adzuna, Remotive, Arbeitnow) no gastan créditos. El consumo real
-      del mes se ve en <a href="/runs">Ejecuciones</a>.
+      Adzuna, Remotive y Arbeitnow no gastan créditos. El consumo real del mes se ve en
+      <a href="/runs">Ejecuciones</a>.
     </small>
   </p>
 </article>

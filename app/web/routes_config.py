@@ -56,7 +56,18 @@ router = APIRouter()
 
 # Vocabulario de los formularios. Se declara aquí y se pinta desde las plantillas
 # para que añadir una fuente o un idioma sea una línea y no una cacería por el HTML.
-FUENTES_DISPONIBLES: tuple[str, ...] = ("adzuna", "remotive", "arbeitnow", "jsearch")
+#
+# Esta tupla no sólo dibuja los checkboxes: `_solo_conocidos()` la usa para filtrar lo
+# que se guarda. Cuando Scrappa se añadió al proyecto, nadie la metió aquí, y el efecto
+# era que editar cualquier búsqueda desde la web le borraba Scrappa en silencio, que es
+# la fuente con las mejores descripciones. Añadir una fuente al proyecto y no a esta
+# tupla no es una carencia de la interfaz: es pérdida de datos.
+FUENTES_DISPONIBLES: tuple[str, ...] = (
+    "scrappa", "adzuna", "remotive", "arbeitnow", "jsearch",
+)
+
+# Las que consumen un cupo mensual con límite duro. Las demás son gratuitas o de cortesía.
+FUENTES_CON_CUPO: frozenset[str] = frozenset({"jsearch", "scrappa"})
 MODALIDADES: tuple[str, ...] = ("remoto", "hibrido", "presencial")
 # Los tres idiomas que `detecta_idioma()` sabe distinguir. Ofrecer más sería mentir:
 # el prefiltro no los reconocería y nunca descartaría por ellos.
@@ -610,12 +621,40 @@ def coste_jsearch(sesion: Session) -> dict:
     por_run = creditos_por_run(sesion, settings.jsearch_paginas)
     al_mes = por_run * RUNS_AL_MES
     return {
+        "fuente": "JSearch",
         "por_run": por_run,
         "al_mes": al_mes,
         "limite": settings.jsearch_limite_mensual,
-        "paginas": settings.jsearch_paginas,
         "runs_al_mes": RUNS_AL_MES,
         "excede": al_mes > settings.jsearch_limite_mensual,
+    }
+
+
+def coste_scrappa(sesion: Session) -> dict:
+    """Lo mismo para Scrappa, que también tiene cupo mensual y también es duro.
+
+    Se cuenta distinto que JSearch a propósito: Scrappa cobra un crédito por LLAMADA y
+    devuelve hasta 100 ofertas en ella, mientras que JSearch cobra por página. Por eso
+    aquí no se multiplica por `jsearch_paginas`: una búsqueda activa es un crédito.
+
+    Este panel no existía y el texto afirmaba que las demás fuentes no gastaban créditos.
+    Era falso desde que se añadió Scrappa, y el cupo se consumía sin que nada lo mostrase.
+    """
+    from app.config import get_settings
+
+    settings = get_settings()
+    activas = sesion.scalars(
+        select(BusquedaGuardada).where(BusquedaGuardada.activa)
+    ).all()
+    por_run = sum(1 for fila in activas if "scrappa" in (fila.fuentes or []))
+    al_mes = por_run * RUNS_AL_MES
+    return {
+        "fuente": "Scrappa",
+        "por_run": por_run,
+        "al_mes": al_mes,
+        "limite": settings.scrappa_limite_mensual,
+        "runs_al_mes": RUNS_AL_MES,
+        "excede": al_mes > settings.scrappa_limite_mensual,
     }
 
 
@@ -780,7 +819,8 @@ def _pagina_busquedas(
             "formularios": {b.id: _formulario_busqueda(b) for b in busquedas},
             "formulario": formulario or _formulario_busqueda(),
             "fuentes_posibles": FUENTES_DISPONIBLES,
-            "coste": coste_jsearch(sesion),
+            "fuentes_con_cupo": FUENTES_CON_CUPO,
+            "costes": [coste_scrappa(sesion), coste_jsearch(sesion)],
             "aviso": aviso,
             "error": error,
         },
