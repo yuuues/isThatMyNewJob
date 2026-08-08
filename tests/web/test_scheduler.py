@@ -163,6 +163,46 @@ def test_crear_scheduler_devuelve_el_planificador_parado(espia_run):
     assert planificador.get_job("run_diario") is not None
 
 
+def test_la_hora_se_interpreta_en_la_zona_de_madrid(espia_run):
+    """La zona tiene que estar en el TRIGGER, no sólo en el planificador.
+
+    Un `CronTrigger` construido suelto usa la zona local del proceso; la del scheduler
+    sólo se aplica a los triggers que él mismo crea. Dentro del contenedor la local es
+    UTC, así que esto disparaba a las 07:00 UTC —las 09:00 de Madrid en verano— mientras
+    el log afirmaba "(Europe/Madrid)".
+    """
+    trigger = crear_scheduler().get_job("run_diario").trigger
+
+    assert str(trigger.timezone) == "Europe/Madrid"
+
+
+def test_una_ejecucion_perdida_no_se_descarta(espia_run):
+    """Sin esto el run diario no se ejecutaba NUNCA en una máquina de escritorio.
+
+    El equipo está apagado o suspendido a las siete de la mañana. Cuando vuelve,
+    APScheduler ve que la hora pasó hace horas y con su `misfire_grace_time` de un
+    segundo por defecto la descarta en silencio. Medido en los logs del contenedor:
+    "was missed by 7:03:49" y "was missed by 8:39:20" en días consecutivos.
+
+    `None` significa "ejecútalo por tarde que sea", que es lo que se quiere: el run del
+    día importa, la hora exacta no.
+    """
+    job = crear_scheduler().get_job("run_diario")
+
+    assert job.misfire_grace_time is None
+
+
+def test_varios_dias_apagado_no_disparan_varios_runs(espia_run):
+    """Tres días sin encender el equipo son un run al volver, no tres.
+
+    Cada run gasta cupo de JSearch y de Scrappa sobre las mismas búsquedas, así que
+    encadenarlos no traería ofertas nuevas: sólo triplicaría el gasto.
+    """
+    job = crear_scheduler().get_job("run_diario")
+
+    assert job.coalesce is True
+
+
 # --------------------------------------------------------------------------
 # Arranque en Docker
 # --------------------------------------------------------------------------
