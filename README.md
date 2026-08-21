@@ -154,8 +154,9 @@ Cinco consecuencias prácticas:
   `SCRAPPA_LIMITE_MENSUAL` (450 por defecto, de 500) y `JSEARCH_LIMITE_MENSUAL` (180, de
   200), dejando margen para diagnóstico. Lo que cada búsqueda activa compromete al mes se
   ve en `/searches`, y lo consumido de verdad en `/runs`: en las dos vistas salen las dos
-  fuentes, contadas por separado. Con run diario, cada búsqueda que use JSearch cuesta unos 30 créditos al mes:
-  caben 5 o 6, así que conviene reservarla para las que de verdad importan.
+  fuentes, contadas por separado. Con run diario, cada búsqueda que use JSearch cuesta
+  unos 30 créditos al mes: caben 5 o 6, así que conviene reservarla para las que de
+  verdad importan.
 - **Adzuna sirve para descubrir; para clasificar a fondo hay que enriquecerla.** Antes de
   prefiltrar, el run lee la ficha pública de cada oferta truncada y sustituye el extracto
   de 500 caracteres por el texto completo (`app/sources/adzuna_web.py`, con tope de
