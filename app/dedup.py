@@ -32,7 +32,36 @@ def normaliza_empresa(empresa: str | None) -> str:
     return " ".join(palabras)
 
 
-def hash_dedup(empresa: str | None, titulo: str | None, ubicacion: str | None) -> str:
-    """Clave canónica de una oferta, independiente de la fuente que la sirvió."""
-    partes = [normaliza_empresa(empresa), normaliza(titulo), normaliza(ubicacion)]
+def hash_dedup(empresa: str | None, titulo: str | None) -> str:
+    """Clave canónica de una oferta, independiente de la fuente que la sirvió.
+
+    La ubicación NO entra en la clave, aunque el spec la incluía. Es el campo menos
+    estable de una oferta y medirlo sobre datos reales lo dejó claro por dos vías:
+
+    - Adzuna republica un mismo anuncio como un listado por provincia, cada uno con su
+      `id`: nueve filas de la misma oferta de PayXpert, cada una con su scrape y su
+      llamada al modelo.
+    - Cada fuente escribe la ubicación a su manera. Para la misma oferta, adzuna dice
+      "Barcelona" y scrappa "08029 Barcelona, Barcelona provincia"; o adzuna dice
+      "España" donde scrappa dice "Valencia, Valencia provincia". Con la ubicación
+      dentro, la clave que existe justamente para reconocer la misma oferta llegada por
+      fuentes distintas no casaba casi nunca.
+
+    El coste asumido: dos vacantes distintas de la misma empresa con el mismo título en
+    ciudades distintas colapsan en una. Se prefiere a lo contrario porque la ubicación
+    no se pierde — se acumula en `Job.ubicaciones` — y el prefiltro las mira todas.
+    """
+    partes = [normaliza_empresa(empresa), normaliza(titulo)]
     return hashlib.sha256("|".join(partes).encode("utf-8")).hexdigest()
+
+
+def ubicaciones_conocidas(oferta) -> list[str]:
+    """Todas las ubicaciones de una oferta, con la principal siempre la primera.
+
+    Sirve igual para un `Job` que para un `RawJob`. La lista puede venir vacía o a None:
+    `asegura_esquema()` añade `ubicaciones` sin valor por defecto, así que las filas
+    anteriores a la columna la tienen a NULL y sólo saben de su `ubicacion`.
+    """
+    principal = oferta.ubicacion
+    resto = [u for u in (oferta.ubicaciones or []) if u and u != principal]
+    return ([principal] if principal else []) + resto

@@ -251,3 +251,37 @@ def test_una_ubicacion_vacia_no_descarta():
     prefs = Preferencias(modalidades=["presencial"], zonas=["madrid"])
 
     assert aplica_prefiltro(job(modalidad="presencial", ubicacion=None), prefs).descartada is False
+
+
+def test_no_descarta_por_zona_si_alguna_de_las_ubicaciones_encaja():
+    """Una oferta colapsada trae todas las ciudades en las que se publicó. Mirar sólo la
+    primera descartaría por zona una oferta que también estaba en Madrid."""
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid"])
+    oferta = job(
+        modalidad="presencial",
+        ubicacion="Guntín, Lugo",
+        ubicaciones=["Guntín, Lugo", "Madrid"],
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False
+
+
+def test_descarta_por_zona_si_ninguna_de_las_ubicaciones_encaja():
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid"])
+    oferta = job(
+        modalidad="presencial", ubicacion="Sevilla", ubicaciones=["Sevilla", "Málaga"]
+    )
+
+    resultado = aplica_prefiltro(oferta, prefs)
+
+    assert resultado.descartada is True
+    assert "Sevilla" in resultado.motivo and "Málaga" in resultado.motivo
+
+
+def test_una_sola_ubicacion_de_ambito_nacional_salva_a_toda_la_oferta():
+    prefs = Preferencias(modalidades=["presencial"], zonas=["madrid"])
+    oferta = job(
+        modalidad="presencial", ubicacion="Sevilla", ubicaciones=["Sevilla", "España"]
+    )
+
+    assert aplica_prefiltro(oferta, prefs).descartada is False

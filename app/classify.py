@@ -1,5 +1,6 @@
 import json
 
+from app.dedup import ubicaciones_conocidas
 from app.feedback import EjemploDecision
 from app.llm.base import LLMProvider
 from app.schemas import PerfilCandidato, Preferencias, RawJob, ResultadoClasificacion
@@ -106,6 +107,26 @@ def _formatea_salario(job: RawJob) -> str:
     return "no publicado"
 
 
+def _ubicaciones(job: RawJob) -> str:
+    """Todas las ciudades en las que se publicó la oferta, no sólo la primera.
+
+    La deduplicación funde en una sola fila el mismo anuncio republicado por provincias
+    (ver app/dedup.py). Enseñarle al modelo únicamente 'Guntín, Lugo' cuando la oferta
+    también estaba en Madrid le hace juzgar mal el eje de zona, que es justo lo que la
+    regla 8 del prompt le pide afinar.
+
+    No sube `PROMPT_VERSION` a propósito: para una oferta con una sola ubicación el texto
+    sale idéntico al de antes, así que los veredictos ya guardados no se han quedado
+    viejos y marcarlos como tales invitaría a repetir 369 llamadas para nada.
+    """
+    sitios = ubicaciones_conocidas(job)
+    if not sitios:
+        return "no publicada"
+    if len(sitios) == 1:
+        return sitios[0]
+    return f"{' / '.join(sitios)} (el mismo anuncio se publicó en todas ellas)"
+
+
 def _bloque_oferta(job: RawJob) -> str:
     descripcion = job.descripcion[:MAX_CARACTERES_DESCRIPCION]
     salario = _formatea_salario(job)
@@ -120,7 +141,7 @@ def _bloque_oferta(job: RawJob) -> str:
     return (
         f"Título: {job.titulo}\n"
         f"Empresa: {job.empresa}\n"
-        f"Ubicación: {job.ubicacion or 'no publicada'}\n"
+        f"Ubicación: {_ubicaciones(job)}\n"
         f"Modalidad detectada: {job.modalidad}\n"
         f"Salario: {salario}\n"
         f"Fuente: {job.fuente}\n"

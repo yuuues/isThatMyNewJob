@@ -46,6 +46,14 @@
 
           <td>
             <small>{{ fila.oferta.ubicacion or "sin ubicación" }}</small>
+            {% set otras = (fila.oferta.ubicaciones or []) | reject("equalto", fila.oferta.ubicacion) | list %}
+            {% if otras %}
+            <br />
+            {# Se separan con '·' y no con comas: 'Arbo, Pontevedra' ya lleva una dentro. #}
+            <small title="{{ otras | join(' · ') }}">
+              y {{ otras | length }} ubicaci{{ "ón" if otras | length == 1 else "ones" }} más
+            </small>
+            {% endif %}
             <br />
             <small>{{ fila.oferta.modalidad }}</small>
           </td>

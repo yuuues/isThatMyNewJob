@@ -51,6 +51,7 @@ def _a_rawjob(job: Job) -> RawJob:
         titulo=job.titulo,
         empresa=job.empresa,
         ubicacion=job.ubicacion,
+        ubicaciones=job.ubicaciones or [],
         modalidad=job.modalidad,
         salario_min=job.salario_min,
         salario_max=job.salario_max,

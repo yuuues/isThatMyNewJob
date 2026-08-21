@@ -28,6 +28,10 @@ class RawJob(BaseModel):
     titulo: str
     empresa: str
     ubicacion: str | None = None
+    # Las fuentes sólo saben de una ubicación y la dejan vacía. La rellena el pipeline al
+    # reconstruir un `RawJob` desde una fila ya deduplicada, para que el prefiltro pueda
+    # vetar por zona mirando todas las ciudades y no sólo la que llegó primero.
+    ubicaciones: list[str] = Field(default_factory=list)
     modalidad: Modalidad = "desconocida"
     salario_min: float | None = None
     salario_max: float | None = None

@@ -59,6 +59,15 @@ class Job(Base):
     titulo: Mapped[str] = mapped_column(String)
     empresa: Mapped[str] = mapped_column(String)
     ubicacion: Mapped[str | None] = mapped_column(String, default=None)
+    # Todas las ciudades en las que se vio publicada la misma oferta, `ubicacion`
+    # incluida y la primera. La deduplicación colapsa por empresa+título (ver
+    # app/dedup.py), y sin esta lista el colapso tiraría la única ubicación que encajaba
+    # con las zonas del usuario. El prefiltro las mira todas antes de vetar por zona.
+    #
+    # Ojo: `asegura_esquema()` la añade a las bases existentes sin valor por defecto, así
+    # que las filas antiguas la tienen a NULL y no a []. Usar `ubicaciones_conocidas()`
+    # en vez de leerla directamente.
+    ubicaciones: Mapped[list] = mapped_column(JSON, default=list)
     modalidad: Mapped[str] = mapped_column(String, default="desconocida")
     salario_min: Mapped[float | None] = mapped_column(Float, default=None)
     salario_max: Mapped[float | None] = mapped_column(Float, default=None)

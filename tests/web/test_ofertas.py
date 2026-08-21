@@ -199,6 +199,43 @@ def test_la_fila_muestra_empresa_ubicacion_modalidad_fuente_y_razonamiento(
         assert dato in html
 
 
+def test_la_fila_avisa_de_las_demas_ubicaciones_de_la_oferta(
+    cliente: TestClient, crea_clasificada
+):
+    """La misma oferta se publica en varias ciudades y la deduplicación las funde en una
+    fila. Si la fila sólo enseñara 'Madrid', el usuario no sabría que también está en
+    Valencia."""
+    crea_clasificada(
+        ubicacion="Madrid", ubicaciones=["Madrid", "Valencia", "Málaga"]
+    )
+
+    html = cliente.get("/").text
+
+    assert "Madrid" in html
+    assert "y 2 ubicaciones más" in html
+    assert "Valencia · Málaga" in html
+
+
+def test_una_oferta_con_una_sola_ubicacion_no_lleva_el_aviso(
+    cliente: TestClient, crea_clasificada
+):
+    crea_clasificada(ubicacion="Madrid", ubicaciones=["Madrid"])
+
+    assert "ubicaciones más" not in cliente.get("/").text
+
+
+def test_una_fila_anterior_a_la_columna_de_ubicaciones_se_pinta_igual(
+    cliente: TestClient, crea_clasificada
+):
+    """`asegura_esquema()` deja `ubicaciones` a NULL en las bases ya existentes."""
+    crea_clasificada(ubicacion="Madrid", ubicaciones=None)
+
+    html = cliente.get("/").text
+
+    assert "Madrid" in html
+    assert "ubicaciones más" not in html
+
+
 def test_el_filtro_por_fuente_devuelve_solo_esa_fuente(cliente: TestClient, crea_clasificada):
     crea_clasificada(fuente="adzuna", titulo="Viene de Adzuna")
     crea_clasificada(fuente="remotive", titulo="Viene de Remotive")

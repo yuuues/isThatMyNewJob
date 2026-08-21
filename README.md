@@ -52,6 +52,27 @@ runs contra las APIs de verdad. Para dejarlo apagado también en `up`, basta con
 Un run se puede lanzar también a mano desde la vista de búsquedas, con un límite de uno
 cada seis horas: el aviso legal de Remotive pide como mucho unas cuatro peticiones al día.
 
+### Deduplicación
+
+Dos ofertas son la misma cuando coinciden **empresa y título**, normalizados y sin la
+forma jurídica (`Acme S.L.` y `ACME SL` son la misma empresa).
+
+La ubicación **no** entra en la clave, aunque el spec la incluía. Medido sobre la base
+real, con ella dentro la deduplicación no servía para nada:
+
+- Adzuna republica un mismo anuncio como un listado por provincia, cada uno con su `id`.
+  Una sola oferta de PayXpert ocupaba **nueve filas**, con nueve scrapes de la ficha y
+  nueve llamadas al modelo.
+- Cada fuente escribe la ubicación a su manera: para la misma oferta, adzuna dice
+  `Barcelona` y scrappa `08029 Barcelona, Barcelona provincia`; o adzuna dice `España`
+  donde scrappa dice `Valencia, Valencia provincia`. Así, la clave que existe justamente
+  para reconocer la misma oferta llegada por dos fuentes no casaba casi nunca.
+
+La ubicación no se pierde al fundir: se acumulan todas en la oferta que se conserva, la
+ficha las enumera y el prefiltro las mira todas antes de vetar por zona — basta con que
+una encaje. Lo que se asume a cambio: dos vacantes distintas de la misma empresa con el
+mismo título en ciudades distintas se ven como una.
+
 ## La web
 
 Cinco vistas, todas en <http://localhost:8100>:
@@ -196,6 +217,20 @@ La tabla `decision` ha cambiado desde entonces: sus estados ya no son
 vuelve a ejecutar `init` y `cv`. Es una herramienta local monousuario y no compensa
 mantener migraciones. Se pierden las decisiones anteriores; las ofertas se vuelven a
 recoger en el siguiente run.
+
+### Ofertas repetidas de antes del cambio de deduplicación
+
+La clave dejó de mirar la ubicación, pero las ofertas ya guardadas llevan la clave
+anterior: siguen repetidas una vez por ciudad, y las que no tienen duplicado volverían a
+entrar como nuevas en el siguiente run. Se arregla una sola vez y sin gastar API:
+
+```bash
+docker compose run --rm app python -m app.cli fusionar-duplicados
+```
+
+De cada grupo se conserva la fila que más información lleva encima — primero la que tiene
+una decisión tuya, luego la que tiene veredicto del modelo — y se le acumulan las
+ubicaciones de las demás. No hay que reclasificar nada.
 
 ## Desarrollo
 

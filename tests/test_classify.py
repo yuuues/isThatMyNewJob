@@ -254,6 +254,26 @@ def test_el_prompt_manda_deducir_la_ubicacion_del_texto():
     assert "genérico" in minusculas or "generico" in minusculas
 
 
+def test_el_prompt_enumera_todas_las_ubicaciones_de_la_oferta():
+    """La deduplicación funde el mismo anuncio publicado por provincias. Si el prompt
+    sólo enseñara 'Guntín, Lugo', el modelo juzgaría la zona por una ciudad al azar."""
+    varias = oferta().model_copy(
+        update={"ubicacion": "Guntín, Lugo", "ubicaciones": ["Guntín, Lugo", "Madrid"]}
+    )
+
+    prompt = construye_prompt_usuario(varias, perfil=perfil(), prefs=Preferencias(), ejemplos=[])
+
+    assert "Guntín, Lugo / Madrid" in prompt
+
+
+def test_una_oferta_de_una_sola_ubicacion_produce_el_prompt_de_siempre():
+    """Por eso `PROMPT_VERSION` no sube: para casi todas las ofertas el texto no cambia y
+    los veredictos ya guardados siguen siendo comparables."""
+    prompt = construye_prompt_usuario(oferta(), perfil=perfil(), prefs=Preferencias(), ejemplos=[])
+
+    assert "Ubicación: Madrid\n" in prompt
+
+
 def test_la_version_del_prompt_sube_al_cambiar_las_reglas():
     """`prompt_version` se guarda en cada clasificación y se muestra en la ficha.
 
