@@ -1,4 +1,4 @@
-"""Vista de diagnóstico: histórico de runs, descartes por regla y cupo de JSearch.
+"""Vista de diagnóstico: histórico de runs, descartes por regla y cupos mensuales.
 
 Estos tests valen más de lo que parece. La lista de descartes por regla es la que
 hizo aflorar tres defectos reales del sistema (ofertas de ámbito nacional
@@ -27,6 +27,9 @@ from app.web import routes_runs
 # inventada no recibe ningún estilo, así que el ajuste se vería bien en el navegador
 # de quien lo escribió y en ningún otro sitio.
 CLASES_PERMITIDAS = {"container", "tarjeta", "tenue", "aviso", "etiqueta"}
+
+# Distinto del de JSearch (200) a propósito, para que un cupo no pueda pasar por el otro.
+LIMITE_SCRAPPA_FIJO = 300
 
 
 def _mes_en_curso() -> str:
@@ -71,10 +74,19 @@ def _crea_run(sesion, **campos) -> Run:
 
 @pytest.fixture
 def limite_fijo(monkeypatch) -> int:
-    """Fija el límite mensual de JSearch para no depender del `.env` de la máquina."""
+    """Fija los límites mensuales de las dos fuentes con cupo, sin mirar el `.env`.
+
+    Devuelve el de JSearch, que es el que comprueban la mayoría de los tests. El de
+    Scrappa se fija a un número distinto a propósito: si los dos cupos compartieran
+    límite, un test que confundiera uno con el otro pasaría por casualidad.
+    """
     limite = 200
     monkeypatch.setattr(
-        routes_runs, "get_settings", lambda: Settings(jsearch_limite_mensual=limite)
+        routes_runs,
+        "get_settings",
+        lambda: Settings(
+            jsearch_limite_mensual=limite, scrappa_limite_mensual=LIMITE_SCRAPPA_FIJO
+        ),
     )
     return limite
 
@@ -417,6 +429,52 @@ def test_el_periodo_del_cupo_es_el_mes_en_curso(cliente: TestClient, limite_fijo
 def test_periodo_actual_usa_el_formato_de_presupuesto_mensual():
     """`PresupuestoMensual` escribe `%Y-%m`; leer con otro formato daría cero siempre."""
     assert routes_runs.periodo_actual(datetime(2026, 3, 9, tzinfo=UTC)) == "2026-03"
+
+
+# --- Cupo de Scrappa ---------------------------------------------------------
+
+
+def test_el_cupo_de_scrappa_se_muestra_como_el_de_jsearch(
+    cliente: TestClient, sesion, limite_fijo
+):
+    """Scrappa también tiene límite duro y su consumo también se escribe en `source_usage`.
+
+    Enseñar sólo el de JSearch dejaba el otro cupo gastándose a ciegas: cuando se
+    agotara, Scrappa dejaría de traer ofertas sin que nada en la aplicación lo dijera.
+    """
+    assert PresupuestoMensual(sesion, "scrappa", limite=LIMITE_SCRAPPA_FIJO).intenta_consumir(48)
+
+    texto = _texto(cliente.get("/runs").text)
+
+    assert "Scrappa" in texto, texto
+    assert re.search(rf"48\s*de\s*{LIMITE_SCRAPPA_FIJO}", texto), texto
+    assert re.search(r"\b252\b", texto), "no se ve cuánto queda de Scrappa"
+
+
+def test_cada_cupo_cuenta_solo_el_consumo_de_su_fuente(cliente: TestClient, sesion, limite_fijo):
+    """Los dos cupos conviven en la misma cabecera y no se mezclan.
+
+    Es el defecto que más caro saldría al generalizar la vista: sumar los dos consumos
+    en un solo contador diría que queda cupo donde no queda, o al revés.
+    """
+    assert PresupuestoMensual(sesion, "scrappa", limite=LIMITE_SCRAPPA_FIJO).intenta_consumir(48)
+    assert PresupuestoMensual(sesion, "jsearch", limite=limite_fijo).intenta_consumir(37)
+
+    texto = _texto(cliente.get("/runs").text)
+
+    assert re.search(rf"48\s*de\s*{LIMITE_SCRAPPA_FIJO}", texto), texto
+    assert re.search(rf"37\s*de\s*{limite_fijo}", texto), texto
+
+
+def test_agotar_un_cupo_no_marca_agotado_el_otro(cliente: TestClient, sesion, limite_fijo):
+    """El aviso de agotado nombra a su fuente: si no, avisa de una fuente que sí responde."""
+    presupuesto = PresupuestoMensual(sesion, "scrappa", limite=LIMITE_SCRAPPA_FIJO)
+    assert presupuesto.intenta_consumir(LIMITE_SCRAPPA_FIJO)
+
+    texto = _texto(cliente.get("/runs").text)
+
+    assert "Scrappa no traerá nada más hasta el mes que viene." in texto, texto
+    assert "JSearch no traerá nada más" not in texto, texto
 
 
 # --- Plantilla ---------------------------------------------------------------
