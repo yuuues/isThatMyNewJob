@@ -139,9 +139,9 @@ conserva su medición original contra la API porque en la base sólo hay diez of
 | JSearch | España y resto vía Google for Jobs: agrega LinkedIn, Glassdoor, Tecnoempleo, Jooble | **Completa** (mediana 1994 caracteres) | 200 créditos/mes, límite duro. 1 crédito por búsqueda y run |
 | Adzuna | España | **Cortada a 500 caracteres** por la propia API; se completa leyendo la ficha pública (mediana 3115 tras enriquecer) | Gratis, registro |
 | Remotive | Remoto internacional | Completa (mediana 7787 caracteres) | Gratis, sin clave |
-| Arbeitnow | Remoto europeo, sobre todo alemán | Completa (mediana 4748 caracteres) | Gratis, sin clave |
+| Arbeitnow **(no se recomienda activarla)** | Remoto europeo, sobre todo alemán | Completa (mediana 4748 caracteres) | Gratis, sin clave |
 
-Cuatro consecuencias prácticas:
+Cinco consecuencias prácticas:
 
 - **Scrappa es la fuente a la que dar prioridad para España.** El crédito se paga por
   llamada y no por oferta, y `limit` llega a 100: con los 500 créditos gratis salen hasta
@@ -166,6 +166,11 @@ Cuatro consecuencias prácticas:
 - **Lo que siga llegando truncado se marca como tal.** El prompt avisa al modelo de que
   no está viendo los requisitos, para que no confunda "no lo veo" con "el puesto no lo
   pide", y en la web esas ofertas llevan una marca visible.
+- **Arbeitnow no se recomienda para un perfil español.** Medida en producción sobre 88
+  clasificaciones suyas: 0 en `aplicar_ya` y un 94% en `descartar`. Cada oferta que trae
+  gasta una llamada al clasificador. Sigue disponible y se puede elegir
+  (`FUENTES_DISPONIBLES` en `app/web/routes_config.py`), pero las búsquedas de
+  `seed.example.yaml` no la incluyen.
 
 ## Modelos
 
