@@ -11,10 +11,10 @@ preferencias:
 
 # Sobre el reparto de fuentes:
 #
-#   scrappa    Ofertas de INDEED con descripción completa (mediana 3251 caracteres
-#              medida sobre datos reales, la mejor del proyecto). 500 créditos/mes
-#              gratis y 1 crédito por LLAMADA, con hasta 20 ofertas cada una: unas
-#              10.000 ofertas al mes. Es la fuente a la que dar prioridad para España.
+#   scrappa    Ofertas de INDEED con descripción completa (mediana 4540 caracteres
+#              medida sobre 189 ofertas reales, la mejor del proyecto). 500 créditos/mes
+#              gratis y 1 crédito por LLAMADA, con hasta 100 ofertas cada una: hasta
+#              50.000 ofertas al mes. Es la fuente a la que dar prioridad para España.
 #   jsearch    Descripción COMPLETA (mediana de 1994 caracteres medida sobre datos
 #              reales) y agrega LinkedIn, Glassdoor, Tecnoempleo y Jooble. Es la
 #              única con cupo: 200 créditos/mes de límite duro, 1 crédito por

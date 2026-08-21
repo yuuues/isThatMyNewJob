@@ -52,6 +52,27 @@ runs contra las APIs de verdad. Para dejarlo apagado también en `up`, basta con
 Un run se puede lanzar también a mano desde la vista de búsquedas, con un límite de uno
 cada seis horas: el aviso legal de Remotive pide como mucho unas cuatro peticiones al día.
 
+### Deduplicación
+
+Dos ofertas son la misma cuando coinciden **empresa y título**, normalizados y sin la
+forma jurídica (`Acme S.L.` y `ACME SL` son la misma empresa).
+
+La ubicación **no** entra en la clave, aunque el spec la incluía. Medido sobre la base
+real, con ella dentro la deduplicación no servía para nada:
+
+- Adzuna republica un mismo anuncio como un listado por provincia, cada uno con su `id`.
+  Una sola oferta de PayXpert ocupaba **nueve filas**, con nueve scrapes de la ficha y
+  nueve llamadas al modelo.
+- Cada fuente escribe la ubicación a su manera: para la misma oferta, adzuna dice
+  `Barcelona` y scrappa `08029 Barcelona, Barcelona provincia`; o adzuna dice `España`
+  donde scrappa dice `Valencia, Valencia provincia`. Así, la clave que existe justamente
+  para reconocer la misma oferta llegada por dos fuentes no casaba casi nunca.
+
+La ubicación no se pierde al fundir: se acumulan todas en la oferta que se conserva, la
+ficha las enumera y el prefiltro las mira todas antes de vetar por zona — basta con que
+una encaje. Lo que se asume a cambio: dos vacantes distintas de la misma empresa con el
+mismo título en ciudades distintas se ven como una.
+
 ## La web
 
 Cinco vistas, todas en <http://localhost:8100>:
@@ -62,8 +83,8 @@ Cinco vistas, todas en <http://localhost:8100>:
 | `/job/{id}` | El detalle de una oferta y el botón de reclasificar |
 | `/profile` | El perfil extraído del CV, editable, con su histórico |
 | `/preferences` | Salario, modalidades, zonas, vetos, idiomas y notas |
-| `/searches` | Las búsquedas guardadas, su coste en créditos y "buscar ahora" |
-| `/runs` | Histórico de runs, descartes por regla, errores y cupo de JSearch |
+| `/searches` | Las búsquedas guardadas, su coste en créditos de Scrappa y de JSearch, y "buscar ahora" |
+| `/runs` | Histórico de runs, descartes por regla, errores y cupo consumido de Scrappa y de JSearch |
 
 Tres cosas que no se ven a simple vista y conviene saber:
 
@@ -107,26 +128,44 @@ funcionar sin red y una dependencia de CDN es un punto de fallo gratuito.
 
 ## Fuentes
 
-Sin scraping. Todas las cifras de abajo están medidas contra las APIs reales,
-no tomadas de su documentación.
+Cinco fuentes, todas por API. Ninguna cifra viene de la documentación de los proveedores:
+las medianas están medidas sobre las 484 ofertas que hay ahora en la base — 189 de
+Scrappa, 146 de Adzuna, 118 de Arbeitnow y 21 de Remotive —, salvo la de JSearch, que
+conserva su medición original contra la API porque en la base sólo hay diez ofertas suyas.
 
 | Fuente | Cobertura | Descripción | Coste |
 |---|---|---|---|
+| Scrappa | Indeed: España y otros siete países | **Completa** (mediana 4540 caracteres) | 500 créditos/mes gratis. 1 crédito por **llamada**, con hasta 100 ofertas en cada una |
 | JSearch | España y resto vía Google for Jobs: agrega LinkedIn, Glassdoor, Tecnoempleo, Jooble | **Completa** (mediana 1994 caracteres) | 200 créditos/mes, límite duro. 1 crédito por búsqueda y run |
-| Adzuna | España | **Cortada a 500 caracteres** por la propia API | Gratis, registro |
-| Remotive | Remoto internacional | Completa | Gratis, sin clave |
-| Arbeitnow | Remoto europeo, sobre todo alemán | Completa | Gratis, sin clave |
+| Adzuna | España | **Cortada a 500 caracteres** por la propia API; se completa leyendo la ficha pública (mediana 3115 tras enriquecer) | Gratis, registro |
+| Remotive | Remoto internacional | Completa (mediana 7787 caracteres) | Gratis, sin clave |
+| Arbeitnow | Remoto europeo, sobre todo alemán | Completa (mediana 4748 caracteres) | Gratis, sin clave |
 
-Dos consecuencias prácticas:
+Cuatro consecuencias prácticas:
 
-- **Adzuna sirve para descubrir, no para clasificar a fondo.** Sus ofertas se marcan
-  como truncadas y el prompt avisa al modelo de que no está viendo los requisitos,
-  para que no confunda "no lo veo" con "el puesto no lo pide". En la web esas ofertas
-  llevan una marca visible.
-- **JSearch lleva presupuesto mensual persistido.** Con run diario, cada búsqueda que
-  la use cuesta unos 30 créditos al mes: caben 5 o 6. Al agotarse, la fuente se salta
-  y las demás siguen funcionando. Configurable con `JSEARCH_LIMITE_MENSUAL`, y el
-  consumo del mes en curso se ve en `/runs`.
+- **Scrappa es la fuente a la que dar prioridad para España.** El crédito se paga por
+  llamada y no por oferta, y `limit` llega a 100: con los 500 créditos gratis salen hasta
+  50.000 ofertas al mes, varios órdenes de magnitud por encima del resto. Trae además dos
+  señales que las demás obligan a adivinar, `is_remote` como booleano y `attributes` con
+  la modalidad ya etiquetada. Se piden 50 por llamada (`SCRAPPA_RESULTADOS`, máximo 100)
+  para no inflar de golpe la cola del clasificador.
+- **Dos fuentes llevan cupo mensual persistido**, Scrappa y JSearch. Al agotarse, la
+  fuente se salta y las demás siguen funcionando. Se configuran con
+  `SCRAPPA_LIMITE_MENSUAL` (450 por defecto, de 500) y `JSEARCH_LIMITE_MENSUAL` (180, de
+  200), dejando margen para diagnóstico. Lo que cada búsqueda activa compromete al mes se
+  ve en `/searches`, y lo consumido de verdad en `/runs`: en las dos vistas salen las dos
+  fuentes, contadas por separado. Con run diario, cada búsqueda que use JSearch cuesta unos 30 créditos al mes:
+  caben 5 o 6, así que conviene reservarla para las que de verdad importan.
+- **Adzuna sirve para descubrir; para clasificar a fondo hay que enriquecerla.** Antes de
+  prefiltrar, el run lee la ficha pública de cada oferta truncada y sustituye el extracto
+  de 500 caracteres por el texto completo (`app/sources/adzuna_web.py`, con tope de
+  `ADZUNA_SCRAPE_MAX_POR_RUN` fichas por run —40 por defecto— y un contador de fallos para
+  no reintentar eternamente una ficha que Adzuna ya borró; se apaga con
+  `ADZUNA_SCRAPE_ACTIVO=0`). Es la única parte del proyecto que lee HTML, y va contra
+  `/details/`, que el `robots.txt` de Adzuna no prohíbe.
+- **Lo que siga llegando truncado se marca como tal.** El prompt avisa al modelo de que
+  no está viendo los requisitos, para que no confunda "no lo veo" con "el puesto no lo
+  pide", y en la web esas ofertas llevan una marca visible.
 
 ## Modelos
 
@@ -197,6 +236,20 @@ vuelve a ejecutar `init` y `cv`. Es una herramienta local monousuario y no compe
 mantener migraciones. Se pierden las decisiones anteriores; las ofertas se vuelven a
 recoger en el siguiente run.
 
+### Ofertas repetidas de antes del cambio de deduplicación
+
+La clave dejó de mirar la ubicación, pero las ofertas ya guardadas llevan la clave
+anterior: siguen repetidas una vez por ciudad, y las que no tienen duplicado volverían a
+entrar como nuevas en el siguiente run. Se arregla una sola vez y sin gastar API:
+
+```bash
+docker compose run --rm app python -m app.cli fusionar-duplicados
+```
+
+De cada grupo se conserva la fila que más información lleva encima — primero la que tiene
+una decisión tuya, luego la que tiene veredicto del modelo — y se le acumulan las
+ubicaciones de las demás. No hay que reclasificar nada.
+
 ## Desarrollo
 
 ```bash
@@ -218,5 +271,6 @@ Si te sirve de algo, se agradece un café: <https://liberapay.com/YuuuES>.
 MIT. Ver [LICENSE](LICENSE).
 
 Los ficheros de `tests/fixtures/` son muestras recortadas de respuestas de las APIs de
-Adzuna, JSearch, Remotive y Arbeitnow, y siguen sujetos a las condiciones de uso de cada
-proveedor: la licencia MIT cubre el código, no esos datos.
+Scrappa, Adzuna, JSearch, Remotive y Arbeitnow, más dos fichas públicas de Adzuna, y
+siguen sujetos a las condiciones de uso de cada proveedor: la licencia MIT cubre el
+código, no esos datos.

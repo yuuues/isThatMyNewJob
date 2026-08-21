@@ -51,6 +51,18 @@ Pendiente de verificar antes de implementar: forma exacta de los endpoints y esq
 respuesta de las tres APIs, y si InfoJobs mantiene API accesible (sería una cuarta fuente
 relevante para España).
 
+> **Añadido después de la v1.** El proyecto tiene hoy cinco fuentes. A las tres de arriba
+> se sumaron **JSearch** (Google for Jobs: agrega LinkedIn, Glassdoor, Tecnoempleo y
+> Jooble; 200 créditos/mes con límite duro, uno por búsqueda y run) y **Scrappa**
+> (ofertas de Indeed; 500 créditos/mes y un crédito por *llamada*, con hasta 100 ofertas
+> en cada una, lo que la convierte en la fuente a la que dar prioridad para España, y la
+> de mejor material: mediana de 4540 caracteres sin truncar). Las dos llevan cupo mensual
+> persistido en `source_usage`, y `app/presupuesto.py` lo reserva antes de gastar la
+> petición. InfoJobs sigue sin integrarse.
+>
+> El hueco de las descripciones de Adzuna tampoco se tapó con otra fuente, sino leyendo su
+> ficha pública: ver el spec de [el scraper de Adzuna](2026-08-06-scraper-adzuna-design.md).
+
 ### Modelos: Gemini único, proveedor intercambiable
 
 Se evaluó una arquitectura de dos etapas (DeepSeek criba, Gemini razona sobre los
@@ -126,6 +138,12 @@ app/
   web/            rutas + plantillas
 ```
 
+> Este árbol es el de la v1 y se ha quedado corto. `sources/` tiene hoy cinco fuentes
+> —`scrappa.py` y `jsearch.py` además de las tres de arriba— más `adzuna_web.py`, que lee
+> la ficha pública para completar las descripciones truncadas desde `enrich.py`. Se han
+> añadido también `presupuesto.py` (cupos mensuales de Scrappa y JSearch), `limitador.py`,
+> `resiliencia.py`, `decisiones.py`, `cerradas.py`, `reclasifica.py` y `fusion.py`.
+
 Las dos fronteras que sostienen el diseño:
 
 **`JobSource`** — `search(query: SearchQuery) -> list[RawJob]`. Cada fuente traduce su
@@ -143,7 +161,7 @@ Ambas tienen implementación fake, lo que permite probar el pipeline completo si
 | `profile` | ruta del PDF, perfil JSON extraído, marca de edición manual, fecha |
 | `preferences` | salario mínimo, modalidades aceptadas, zonas, sectores veto, tecnologías veto, idiomas, jornada, notas libres |
 | `saved_search` | nombre, query, fuentes activas, parámetros, activa |
-| `job` | fuente, `external_id`, url, título, empresa, ubicación, modalidad, salario min/max, descripción, fecha de publicación, fecha de ingesta, `hash_dedup`, estado de clasificación |
+| `job` | fuente, `external_id`, url, título, empresa, ubicación, `ubicaciones` (todas aquellas en las que se publicó la misma oferta), modalidad, salario min/max, descripción, fecha de publicación, fecha de ingesta, `hash_dedup`, estado de clasificación |
 | `classification` | `job_id`, categoría, confianza, razonamiento, ejes, skills faltantes, red flags, modelo usado, `prompt_version`, fecha |
 | `decision` | `job_id`, estado, motivo del usuario, fecha |
 | `run` | inicio, fin, estadísticas por fuente, errores |
@@ -159,8 +177,17 @@ afine el prompt, en lugar de todo el histórico.
 2. Por cada búsqueda guardada activa y cada fuente asociada, se llama a `search()`.
 3. Los resultados se normalizan al esquema común.
 4. **Deduplicación** por `(fuente, external_id)` y, además, por hash de
-   `empresa + título + ubicación` normalizados. La segunda clave es necesaria porque la
+   `empresa + título` normalizados. La segunda clave es necesaria porque la
    misma oferta llega por Adzuna y por Remotive con identificadores distintos.
+
+   > **Corregido tras medirlo (2026-08-19).** Esta clave incluía la ubicación, y con ella
+   > dentro no deduplicaba nada: Adzuna republica un mismo anuncio como un listado por
+   > provincia con `id` propio — nueve filas, nueve scrapes y nueve llamadas al modelo
+   > para una sola oferta de PayXpert — y cada fuente escribe la ciudad a su manera
+   > (`Barcelona` frente a `08029 Barcelona, Barcelona provincia`), así que la clave que
+   > debía reconocer la misma oferta en dos fuentes casi nunca casaba. La ubicación sale
+   > de la clave y pasa a acumularse en `job.ubicaciones`, que el prefiltro mira entera
+   > antes de vetar por zona.
 5. **Prefiltro determinista**: reglas veto (zona imposible, idioma, palabras vetadas).
    Lo filtrado se marca `descartada_por_regla` y no consume una llamada al LLM. El prefiltro
    no existe sólo por coste: la deduplicación es obligatoria para no reclasificar lo mismo

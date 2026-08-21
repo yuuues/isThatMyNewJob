@@ -266,3 +266,38 @@ def test_el_comando_reclasificar_marca_y_no_clasifica(monkeypatch, tmp_path, cap
 
     with crear_sesion(crear_engine(str(ruta))) as s:
         assert s.get(Job, 1).estado_clasificacion == "pendiente"
+
+
+def test_el_comando_fusionar_duplicados_deja_una_sola_fila(monkeypatch, tmp_path, capsys):
+    """Una base creada con la clave vieja llega con la misma oferta repetida por ciudad.
+
+    El comando también sirve de prueba de que `asegura_esquema()` añade `ubicaciones`:
+    las filas se insertan a mano y la columna se rellena después.
+    """
+    from app.db import crear_engine, crear_sesion, crear_tablas
+    from app.models import Job
+
+    ruta = tmp_path / "app.db"
+    monkeypatch.setenv("RUTA_BD", str(ruta))
+
+    engine = crear_engine(str(ruta))
+    crear_tablas(engine)
+    with crear_sesion(engine) as s:
+        for i, ciudad in enumerate(["Madrid", "Málaga", "Guntín, Lugo"]):
+            s.add(
+                Job(
+                    fuente="adzuna", external_id=str(i), url=f"https://example.com/{i}",
+                    titulo="Senior Backend Developer - Php", empresa="PayXpert",
+                    ubicacion=ciudad, descripcion="Texto",
+                    hash_dedup=f"hash-viejo-{i}", estado_clasificacion="clasificada",
+                )
+            )
+        s.commit()
+
+    assert cli.main(["fusionar-duplicados"]) == 0
+
+    assert "2" in capsys.readouterr().out
+
+    with crear_sesion(crear_engine(str(ruta))) as s:
+        fila = s.scalars(select(Job)).one()
+        assert fila.ubicaciones == ["Madrid", "Málaga", "Guntín, Lugo"]

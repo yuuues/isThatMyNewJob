@@ -255,6 +255,38 @@ def comando_reclasificar(args) -> int:
     return 0
 
 
+def comando_fusionar_duplicados(args) -> int:
+    """Pone al día una base creada con la clave de deduplicación vieja.
+
+    Se ejecuta a mano y una sola vez: el run diario ya deduplica bien de aquí en
+    adelante, y esto es sólo para lo que quedó guardado antes del cambio. Borra filas,
+    así que no se cuela dentro del run.
+    """
+    from app.fusion import fusiona_duplicados
+
+    settings = get_settings()
+    engine = crear_engine(settings.ruta_bd)
+    crear_tablas(engine)
+
+    with crear_sesion(engine) as sesion:
+        resumen = fusiona_duplicados(sesion)
+
+    print(
+        f"{resumen.grupos} ofertas estaban repetidas: se han borrado "
+        f"{resumen.borradas} filas sobrantes y se han conservado sus ubicaciones."
+    )
+    print(f"{resumen.reclaveadas} ofertas han pasado a la clave nueva.")
+
+    if resumen.conflictos:
+        print(
+            f"\nOjo: en {len(resumen.conflictos)} ofertas habías decidido cosas distintas "
+            f"sobre dos copias de lo mismo. Se conserva la decisión más reciente:"
+        )
+        for conflicto in resumen.conflictos:
+            print(f"  - {conflicto}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="isthatmynewjob")
     sub = parser.add_subparsers(dest="comando", required=True)
@@ -279,6 +311,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Rehace también las ofertas sobre las que ya decidiste a mano",
     )
     p_recl.set_defaults(func=comando_reclasificar)
+
+    p_fus = sub.add_parser(
+        "fusionar-duplicados",
+        help="Funde las ofertas repetidas que quedaron con la clave de dedup vieja",
+    )
+    p_fus.set_defaults(func=comando_fusionar_duplicados)
 
     args = parser.parse_args(argv)
     return args.func(args)

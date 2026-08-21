@@ -28,10 +28,18 @@ from app.cerradas import cerradas_por_fuente
 
 router = APIRouter()
 
-# La única fuente con cupo mensual de verdad. Adzuna, Remotive y Arbeitnow no lo
-# tienen (`presupuesto.SinLimite`), así que enseñar un contador para ellas sería
-# ruido que tapa el único número que importa.
-FUENTE_CON_CUPO = "jsearch"
+# Las fuentes con cupo mensual de verdad. Adzuna, Remotive y Arbeitnow no lo tienen
+# (`presupuesto.SinLimite`), así que enseñar un contador para ellas sería ruido que
+# tapa los números que sí importan.
+#
+# El orden es el mismo que en `/searches` (Scrappa antes que JSearch) para que las dos
+# vistas se lean igual, y el nombre visible va aquí y no en la plantilla: la clave es
+# la que escribe `PresupuestoMensual` en `source_usage` y no se puede tocar sin dejar
+# el contador a cero para siempre.
+FUENTES_CON_CUPO: tuple[tuple[str, str], ...] = (
+    ("scrappa", "Scrappa"),
+    ("jsearch", "JSearch"),
+)
 
 # Los descartes sin motivo escrito no pueden quedarse fuera del agrupado: si se
 # filtraran, una oferta descartada sin razón desaparecería de la única vista que
@@ -48,29 +56,45 @@ def periodo_actual(ahora: datetime | None = None) -> str:
     return (ahora or datetime.now(UTC)).strftime("%Y-%m")
 
 
-def _cupo(sesion: Session) -> dict:
-    """Consumo, límite y restante de JSearch en el mes en curso.
+def _cupo(sesion: Session, clave: str, nombre: str, limite: int, periodo: str) -> dict:
+    """Consumo, límite y restante de una fuente con cupo en el mes en curso.
 
     Un mes sin consumo no tiene fila en `source_usage` — la crea el presupuesto al
     gastar el primer crédito —, así que la ausencia de fila significa cero, no error.
     """
-    periodo = periodo_actual()
-    limite = get_settings().jsearch_limite_mensual
     fila = sesion.scalar(
         select(ConsumoFuente).where(
-            ConsumoFuente.fuente == FUENTE_CON_CUPO, ConsumoFuente.periodo == periodo
+            ConsumoFuente.fuente == clave, ConsumoFuente.periodo == periodo
         )
     )
     consumido = fila.peticiones if fila else 0
     restante = max(0, limite - consumido)
     return {
-        "fuente": FUENTE_CON_CUPO,
+        "fuente": nombre,
         "periodo": periodo,
         "consumido": consumido,
         "limite": limite,
         "restante": restante,
         "agotado": restante == 0,
     }
+
+
+def _cupos(sesion: Session) -> list[dict]:
+    """Un cupo por fuente con límite mensual, contados por separado.
+
+    Sumarlos en un solo contador diría que queda cupo donde no queda: son dos límites
+    duros distintos y cada uno se agota por su cuenta.
+    """
+    periodo = periodo_actual()
+    settings = get_settings()
+    limites = {
+        "scrappa": settings.scrappa_limite_mensual,
+        "jsearch": settings.jsearch_limite_mensual,
+    }
+    return [
+        _cupo(sesion, clave, nombre, limites[clave], periodo)
+        for clave, nombre in FUENTES_CON_CUPO
+    ]
 
 
 def _referencia(error: dict) -> str:
@@ -180,7 +204,7 @@ def _pagina(request: Request, sesion: Session, aviso: str | None = None) -> HTML
         {
             "titulo": "Ejecuciones",
             "cerradas": cerradas_por_fuente(sesion),
-            "cupo": _cupo(sesion),
+            "cupos": _cupos(sesion),
             "runs": _runs(sesion),
             "descartes": _descartes(sesion),
             "fallidas": _fallidas(sesion),

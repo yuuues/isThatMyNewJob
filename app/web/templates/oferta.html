@@ -25,6 +25,15 @@
       · {{ fila.oferta.fuente }}
       · publicada {{ fila.fecha }}
     </p>
+    {% set otras = (fila.oferta.ubicaciones or []) | reject("equalto", fila.oferta.ubicacion) | list %}
+    {% if otras %}
+    <p>
+      <small>
+        {# Se separan con '·' y no con comas: 'Arbo, Pontevedra' ya lleva una dentro. #}
+        La misma oferta se publicó también en: {{ otras | join(" · ") }}.
+      </small>
+    </p>
+    {% endif %}
     <p>
       <a href="{{ fila.oferta.url }}" target="_blank" rel="noopener noreferrer">
         Abrir la oferta original
