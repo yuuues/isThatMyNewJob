@@ -1,4 +1,4 @@
-{# Vista de diagnóstico: ejecuciones, descartes por regla y cupo de JSearch.
+{# Vista de diagnóstico: ejecuciones, descartes por regla y cupos mensuales.
 
    Esta pantalla existe para que un fallo silencioso se vea. Mirando los descartes
    por regla aparecieron tres defectos reales del sistema, así que la lista está
@@ -25,18 +25,24 @@
    HTML sin escapar en una plantilla es una costumbre que acaba mal. #}
 
 {% block resumen %}
-  {# El cupo va en la cabecera y no en el cuerpo: es el recurso escaso del sistema
-     —200 créditos al mes con límite duro, uno por búsqueda con JSearch y run— y
-     tiene que verse antes de agotarse, no cuando ya no traiga ofertas. #}
-  <p>
-    Cupo de JSearch en {{ cupo.periodo }}:
-    <strong>{{ cupo.consumido }}</strong> de {{ cupo.limite }} créditos consumidos,
-    quedan <strong>{{ cupo.restante }}</strong>.
-    {% if cupo.agotado %}
-      <mark>Agotado</mark>
-      <small>JSearch no traerá nada más hasta el mes que viene.</small>
-    {% endif %}
-  </p>
+  {# Los cupos van en la cabecera y no en el cuerpo: son el recurso escaso del sistema
+     —créditos al mes con límite duro, que se gastan solos en cada run— y tienen que
+     verse antes de agotarse, no cuando la fuente ya no traiga ofertas.
+
+     Hay un bloque por fuente con cupo, en el mismo orden que en /searches. Se itera en
+     vez de duplicar el párrafo: cada copia a mano es un sitio donde el texto se queda
+     hablando de una sola fuente, que es justo lo que pasó cuando se añadió Scrappa. #}
+  {% for cupo in cupos %}
+    <p>
+      Cupo de {{ cupo.fuente }} en {{ cupo.periodo }}:
+      <strong>{{ cupo.consumido }}</strong> de {{ cupo.limite }} créditos consumidos,
+      quedan <strong>{{ cupo.restante }}</strong>.
+      {% if cupo.agotado %}
+        <mark>Agotado</mark>
+        <small>{{ cupo.fuente }} no traerá nada más hasta el mes que viene.</small>
+      {% endif %}
+    </p>
+  {% endfor %}
 {% endblock %}
 
 {% block contenido %}

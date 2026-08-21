@@ -84,7 +84,7 @@ Cinco vistas, todas en <http://localhost:8100>:
 | `/profile` | El perfil extraído del CV, editable, con su histórico |
 | `/preferences` | Salario, modalidades, zonas, vetos, idiomas y notas |
 | `/searches` | Las búsquedas guardadas, su coste en créditos de Scrappa y de JSearch, y "buscar ahora" |
-| `/runs` | Histórico de runs, descartes por regla, errores y cupo consumido de JSearch |
+| `/runs` | Histórico de runs, descartes por regla, errores y cupo consumido de Scrappa y de JSearch |
 
 Tres cosas que no se ven a simple vista y conviene saber:
 
@@ -153,8 +153,8 @@ Cuatro consecuencias prácticas:
   fuente se salta y las demás siguen funcionando. Se configuran con
   `SCRAPPA_LIMITE_MENSUAL` (450 por defecto, de 500) y `JSEARCH_LIMITE_MENSUAL` (180, de
   200), dejando margen para diagnóstico. Lo que cada búsqueda activa compromete al mes se
-  ve en `/searches`, para las dos fuentes; `/runs` enseña el consumido, pero **sólo el de
-  JSearch**. Con run diario, cada búsqueda que use JSearch cuesta unos 30 créditos al mes:
+  ve en `/searches`, y lo consumido de verdad en `/runs`: en las dos vistas salen las dos
+  fuentes, contadas por separado. Con run diario, cada búsqueda que use JSearch cuesta unos 30 créditos al mes:
   caben 5 o 6, así que conviene reservarla para las que de verdad importan.
 - **Adzuna sirve para descubrir; para clasificar a fondo hay que enriquecerla.** Antes de
   prefiltrar, el run lee la ficha pública de cada oferta truncada y sustituye el extracto
