@@ -51,6 +51,18 @@ Pendiente de verificar antes de implementar: forma exacta de los endpoints y esq
 respuesta de las tres APIs, y si InfoJobs mantiene API accesible (sería una cuarta fuente
 relevante para España).
 
+> **Añadido después de la v1.** El proyecto tiene hoy cinco fuentes. A las tres de arriba
+> se sumaron **JSearch** (Google for Jobs: agrega LinkedIn, Glassdoor, Tecnoempleo y
+> Jooble; 200 créditos/mes con límite duro, uno por búsqueda y run) y **Scrappa**
+> (ofertas de Indeed; 500 créditos/mes y un crédito por *llamada*, con hasta 100 ofertas
+> en cada una, lo que la convierte en la fuente a la que dar prioridad para España, y la
+> de mejor material: mediana de 4540 caracteres sin truncar). Las dos llevan cupo mensual
+> persistido en `source_usage`, y `app/presupuesto.py` lo reserva antes de gastar la
+> petición. InfoJobs sigue sin integrarse.
+>
+> El hueco de las descripciones de Adzuna tampoco se tapó con otra fuente, sino leyendo su
+> ficha pública: ver el spec de [el scraper de Adzuna](2026-08-06-scraper-adzuna-design.md).
+
 ### Modelos: Gemini único, proveedor intercambiable
 
 Se evaluó una arquitectura de dos etapas (DeepSeek criba, Gemini razona sobre los
@@ -125,6 +137,12 @@ app/
   scheduler.py    run periódico
   web/            rutas + plantillas
 ```
+
+> Este árbol es el de la v1 y se ha quedado corto. `sources/` tiene hoy cinco fuentes
+> —`scrappa.py` y `jsearch.py` además de las tres de arriba— más `adzuna_web.py`, que lee
+> la ficha pública para completar las descripciones truncadas desde `enrich.py`. Se han
+> añadido también `presupuesto.py` (cupos mensuales de Scrappa y JSearch), `limitador.py`,
+> `resiliencia.py`, `decisiones.py`, `cerradas.py`, `reclasifica.py` y `fusion.py`.
 
 Las dos fronteras que sostienen el diseño:
 
