@@ -106,6 +106,28 @@ def test_el_detalle_muestra_razonamiento_ejes_modelo_y_version(
     assert re.search(r"[Vv]ersión de prompt[^0-9]*1", html)
 
 
+def test_el_detalle_lista_las_demas_ubicaciones_de_la_oferta(
+    cliente: TestClient, crea_clasificada
+):
+    """Aquí sí se enumeran todas: es la vista donde se decide si merece la pena, y saber
+    que la oferta también estaba en tu ciudad cambia la decisión."""
+    oferta = crea_clasificada(
+        ubicacion="Guntín, Lugo", ubicaciones=["Guntín, Lugo", "Madrid", "Valencia"]
+    )
+
+    html = cliente.get(f"/job/{oferta.id}").text
+
+    assert "Madrid · Valencia" in html
+
+
+def test_el_detalle_de_una_oferta_con_una_sola_ubicacion_no_enumera_nada(
+    cliente: TestClient, crea_clasificada
+):
+    oferta = crea_clasificada(ubicacion="Madrid", ubicaciones=["Madrid"])
+
+    assert "se publicó también en" not in cliente.get(f"/job/{oferta.id}").text
+
+
 def test_el_detalle_muestra_la_descripcion_completa(cliente: TestClient, crea_clasificada):
     oferta = crea_clasificada(descripcion="Buscamos backend con Python y PostgreSQL.")
 

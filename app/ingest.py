@@ -3,7 +3,7 @@ from collections.abc import Callable
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.dedup import hash_dedup
+from app.dedup import hash_dedup, normaliza, ubicaciones_conocidas
 from app.models import Job
 from app.schemas import RawJob, SearchQuery
 from app.sources.base import JobSource
@@ -17,6 +17,7 @@ def _a_modelo(oferta: RawJob, clave: str) -> Job:
         titulo=oferta.titulo,
         empresa=oferta.empresa,
         ubicacion=oferta.ubicacion,
+        ubicaciones=[oferta.ubicacion] if oferta.ubicacion else [],
         modalidad=oferta.modalidad,
         salario_min=oferta.salario_min,
         salario_max=oferta.salario_max,
@@ -30,28 +31,48 @@ def _a_modelo(oferta: RawJob, clave: str) -> Job:
     )
 
 
-def _ya_conocida(sesion: Session, oferta: RawJob, clave: str) -> bool:
-    """Comprueba las dos claves de deduplicación que exige el spec.
+def _ya_conocida(sesion: Session, oferta: RawJob, clave: str) -> Job | None:
+    """Devuelve la fila que ya representa esta oferta, o None si es nueva.
 
-    `hash_dedup` reconoce la misma oferta llegada por fuentes distintas; el par
+    Comprueba las dos claves de deduplicación: `hash_dedup` reconoce la misma oferta
+    llegada por fuentes distintas o republicada en otra ciudad; el par
     (fuente, external_id) reconoce la misma oferta republicada con el título
     retocado. Sin la segunda, la reinserción chocaba contra la UniqueConstraint y
     el rollback se llevaba por delante todo el lote.
+
+    Devuelve la fila y no un booleano porque el duplicado no es basura: trae una
+    ubicación que la fila guardada puede no conocer todavía.
     """
-    return (
-        sesion.scalar(
-            select(Job.id).where(
-                or_(
-                    Job.hash_dedup == clave,
-                    and_(
-                        Job.fuente == oferta.fuente,
-                        Job.external_id == oferta.external_id,
-                    ),
-                )
+    return sesion.scalar(
+        select(Job).where(
+            or_(
+                Job.hash_dedup == clave,
+                and_(
+                    Job.fuente == oferta.fuente,
+                    Job.external_id == oferta.external_id,
+                ),
             )
         )
-        is not None
     )
+
+
+def _suma_ubicacion(job: Job, ubicacion: str | None) -> None:
+    """Añade al histórico de la oferta una ciudad que trae un duplicado.
+
+    Se compara normalizado para no acumular 'Barcelona' y 'BARCELONA ' como dos sitios,
+    pero se guarda el texto tal cual llegó: es lo que se le enseña al usuario.
+
+    La lista se reasigna entera a propósito: SQLAlchemy no detecta un `append` sobre una
+    columna JSON y el cambio no llegaría a la base.
+    """
+    if not ubicacion:
+        return
+
+    conocidas = ubicaciones_conocidas(job)
+    if any(normaliza(u) == normaliza(ubicacion) for u in conocidas):
+        return
+
+    job.ubicaciones = [*conocidas, ubicacion]
 
 
 def _unidades_de_trabajo(
@@ -99,8 +120,10 @@ def ingesta(
                 parcial["recibidas"] = len(ofertas)
 
                 for oferta in ofertas:
-                    clave = hash_dedup(oferta.empresa, oferta.titulo, oferta.ubicacion)
-                    if _ya_conocida(sesion, oferta, clave):
+                    clave = hash_dedup(oferta.empresa, oferta.titulo)
+                    conocida = _ya_conocida(sesion, oferta, clave)
+                    if conocida is not None:
+                        _suma_ubicacion(conocida, oferta.ubicacion)
                         parcial["duplicadas"] += 1
                         continue
 

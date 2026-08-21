@@ -87,15 +87,77 @@ def test_no_duplica_una_oferta_ya_vista(sesion):
 
 
 def test_deduplica_la_misma_oferta_llegada_por_dos_fuentes(sesion):
-    a = FakeSource([raw("1", fuente="adzuna", empresa="Acme S.L.")], nombre="adzuna")
+    """Cada fuente escribe la ubicación a su manera, así que la clave no puede mirarla:
+    para la misma oferta, adzuna dice 'Barcelona' y scrappa '08029 Barcelona, Barcelona
+    provincia'."""
+    a = FakeSource(
+        [raw("1", fuente="adzuna", empresa="Acme S.L.", ubicacion="Barcelona")],
+        nombre="adzuna",
+    )
     b = FakeSource(
-        [raw("zzz", fuente="remotive", empresa="ACME SL", titulo="backend developer")],
-        nombre="remotive",
+        [
+            raw(
+                "zzz",
+                fuente="scrappa",
+                empresa="ACME SL",
+                titulo="backend developer",
+                ubicacion="08029 Barcelona, Barcelona provincia",
+            )
+        ],
+        nombre="scrappa",
     )
 
     ingesta(sesion, [a, b], [SearchQuery(nombre="x", texto="x")])
 
     assert sesion.scalar(select(func.count()).select_from(Job)) == 1
+
+
+def test_la_misma_oferta_en_varias_ciudades_es_una_sola_fila(sesion):
+    """Adzuna republica un mismo anuncio como un listado por provincia, cada uno con su
+    `id`. Medido en datos reales: nueve filas de PayXpert, nueve scrapes y nueve
+    llamadas al modelo para una única oferta."""
+    ciudades = ["Madrid", "Málaga", "Guntín, Lugo", "España"]
+    fuente = FakeSource(
+        [raw(str(i), ubicacion=ciudad) for i, ciudad in enumerate(ciudades)]
+    )
+
+    stats = ingesta(sesion, [fuente], [SearchQuery(nombre="x", texto="x")])
+
+    assert sesion.scalar(select(func.count()).select_from(Job)) == 1
+    assert stats["fake"]["nuevas"] == 1
+    assert stats["fake"]["duplicadas"] == 3
+
+
+def test_el_duplicado_aporta_su_ubicacion_a_la_fila_que_se_conserva(sesion):
+    """Sin esto, colapsar por empresa+título perdería la única ubicación que encajaba
+    con las zonas del usuario y el prefiltro descartaría la oferta por la que llegó
+    primero."""
+    fuente = FakeSource([raw("1", ubicacion="Guntín, Lugo"), raw("2", ubicacion="Madrid")])
+
+    ingesta(sesion, [fuente], [SearchQuery(nombre="x", texto="x")])
+
+    guardada = sesion.scalar(select(Job))
+    assert guardada.ubicaciones == ["Guntín, Lugo", "Madrid"]
+
+
+def test_no_repite_una_ubicacion_ya_conocida(sesion):
+    """'Barcelona' y 'BARCELONA ' son la misma ciudad escrita por dos fuentes."""
+    fuente = FakeSource([raw("1", ubicacion="Barcelona"), raw("2", ubicacion="BARCELONA ")])
+
+    ingesta(sesion, [fuente], [SearchQuery(nombre="x", texto="x")])
+
+    assert sesion.scalar(select(Job)).ubicaciones == ["Barcelona"]
+
+
+def test_la_ubicacion_del_duplicado_sobrevive_al_commit(sesion):
+    """SQLAlchemy no detecta un `append` sobre una columna JSON: hay que reasignar la
+    lista entera o el cambio no llega a la base."""
+    query = [SearchQuery(nombre="x", texto="x")]
+    ingesta(sesion, [FakeSource([raw("1", ubicacion="Madrid")])], query)
+    ingesta(sesion, [FakeSource([raw("2", ubicacion="Valencia")])], query)
+
+    sesion.expire_all()
+    assert sesion.scalar(select(Job)).ubicaciones == ["Madrid", "Valencia"]
 
 
 def test_una_fuente_caida_no_impide_que_las_demas_ingesten(sesion):

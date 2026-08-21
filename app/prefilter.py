@@ -3,7 +3,7 @@ import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 
-from app.dedup import normaliza
+from app.dedup import normaliza, ubicaciones_conocidas
 from app.schemas import Preferencias, RawJob
 
 _STOPWORDS = {
@@ -80,6 +80,12 @@ def _es_ambito_nacional(ubicacion_normalizada: str) -> bool:
     return ubicacion_normalizada in _AMBITO_NACIONAL
 
 
+def _encaja_zona(ubicacion_normalizada: str, zonas: list[str]) -> bool:
+    return _es_ambito_nacional(ubicacion_normalizada) or any(
+        normaliza(z) in ubicacion_normalizada for z in zonas
+    )
+
+
 @dataclass(frozen=True)
 class ResultadoPrefiltro:
     descartada: bool
@@ -122,10 +128,15 @@ def aplica_prefiltro(job: RawJob, prefs: Preferencias) -> ResultadoPrefiltro:
         return ResultadoPrefiltro(True, f"modalidad no aceptada: {job.modalidad}")
 
     if job.modalidad in ("presencial", "hibrido") and prefs.zonas:
-        ubicacion = normaliza(job.ubicacion)
-        if ubicacion and not _es_ambito_nacional(ubicacion):
-            if not any(normaliza(z) in ubicacion for z in prefs.zonas):
-                return ResultadoPrefiltro(True, f"zona fuera de rango: {job.ubicacion}")
+        # Todas las ciudades en las que se vio la oferta, no sólo la que llegó primero:
+        # la deduplicación colapsa por empresa+título y una misma oferta puede estar
+        # publicada en Lugo y en Madrid. Basta con que UNA encaje para no descartar, que
+        # es la lectura conservadora del módulo. Ver app/dedup.py.
+        candidatas = [normaliza(u) for u in ubicaciones_conocidas(job)]
+        candidatas = [u for u in candidatas if u]
+        if candidatas and not any(_encaja_zona(u, prefs.zonas) for u in candidatas):
+            sitios = ", ".join(ubicaciones_conocidas(job))
+            return ResultadoPrefiltro(True, f"zona fuera de rango: {sitios}")
 
     if prefs.salario_min is not None and job.salario_max is not None:
         if job.salario_max < prefs.salario_min:
