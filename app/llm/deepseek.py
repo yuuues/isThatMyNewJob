@@ -30,7 +30,7 @@ class DeepSeekProvider:
     def __init__(
         self,
         api_key: str,
-        modelo: str = "deepseek-v4-flash",
+        modelo: str = "deepseek-flash",
         timeout: float = 120.0,
         pensamiento: bool = False,
     ) -> None:

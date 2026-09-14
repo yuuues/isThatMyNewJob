@@ -183,7 +183,7 @@ una rama en la factoría.
 | Tarea | Modelo por defecto | Por qué |
 |---|---|---|
 | Clasificar ofertas | `gemini-3.5-flash-lite` (`MODELO_GEMINI`) | Unas 100 llamadas al día. Tiene capa gratuita y cuesta 5x menos en entrada que Flash |
-| Clasificar ofertas (alternativa) | `deepseek-v4-flash` (`MODELO_DEEPSEEK`) | Con `PROVEEDOR_CLASIFICACION=deepseek` |
+| Clasificar ofertas (alternativa) | `deepseek-flash` (`MODELO_DEEPSEEK`) | Con `PROVEEDOR_CLASIFICACION=deepseek` |
 | Extraer el perfil del CV | `gemini-3.6-flash` (`MODELO_PERFIL`) | Una sola llamada, multimodal sobre el PDF. Aquí manda la calidad, no el precio |
 
 Dos cosas que conviene saber:
