@@ -19,6 +19,12 @@ class SearchQuery(BaseModel):
     max_resultados: int = 50
 
 
+# Lo que escriben las fuentes cuando la oferta no trae empresa. No es el nombre de
+# ninguna: dos ofertas «Desconocida» son, casi siempre, de empresas distintas. Quien
+# agrupe por empresa tiene que tratarlo como ausencia de dato, no como una empresa más.
+EMPRESA_DESCONOCIDA = "Desconocida"
+
+
 class RawJob(BaseModel):
     """Oferta ya normalizada al esquema común, antes de persistirse."""
 

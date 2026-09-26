@@ -18,9 +18,12 @@ from app.decisiones import (
     ESTADO_APLICADA,
     ESTADO_DESCARTADA_POR_MI,
     ESTADO_GUARDADA,
+    EntradaHistorial,
     registra_decision,
 )
 from app.models import Clasificacion
+from app.schemas import EMPRESA_DESCONOCIDA
+from app.web.routes_ofertas import frases_historial
 
 EJES = {
     "tecnico": "Python coincide",
@@ -132,7 +135,8 @@ def _hace(dias: int) -> datetime:
 
 
 def test_a_igual_confianza_manda_la_fecha_mas_reciente(cliente: TestClient, crea_clasificada):
-    crea_clasificada(titulo="Publicada hace mucho", publicada_en=_hace(60))
+    # Dentro del filtro de antigüedad por defecto: aquí se prueba el orden, no el filtro.
+    crea_clasificada(titulo="Publicada hace mucho", publicada_en=_hace(20))
     crea_clasificada(titulo="Publicada hace poco", publicada_en=_hace(2))
 
     html = cliente.get("/").text
@@ -335,6 +339,90 @@ def test_la_fila_avisa_del_historial_con_esa_empresa(
     assert "aplicaste" in html
 
 
+def _entrada(job_id: int, estado: str, dia: int, aplicada_dia: int | None = None):
+    return EntradaHistorial(
+        job_id=job_id,
+        titulo=f"Oferta {job_id}",
+        empresa="Acme",
+        estado=estado,
+        motivo="",
+        decidida_en=datetime(2026, 8, dia),
+        aplicada_en=datetime(2026, 8, aplicada_dia) if aplicada_dia else None,
+    )
+
+
+def test_un_estado_repetido_con_la_empresa_se_resume_en_una_linea():
+    """Tres «descartaste una oferta suya» seguidos llenaban la fila y decían menos
+    que el recuento: lo que importa es cuántas veces y cuándo fue la última."""
+    entradas = [
+        _entrada(1, ESTADO_DESCARTADA_POR_MI, 19),
+        _entrada(2, ESTADO_DESCARTADA_POR_MI, 3),
+        _entrada(3, ESTADO_DESCARTADA_POR_MI, 3),
+    ]
+
+    assert frases_historial(entradas) == [
+        "descartaste 3 ofertas suyas (la última el 19/08/2026)"
+    ]
+
+
+def test_un_estado_que_no_se_repite_conserva_su_frase():
+    assert frases_historial([_entrada(1, ESTADO_DESCARTADA_POR_MI, 19)]) == [
+        "descartaste una oferta suya el 19/08/2026"
+    ]
+
+
+def test_cada_estado_va_en_su_linea_y_lo_mas_reciente_primero():
+    entradas = [
+        _entrada(1, ESTADO_GUARDADA, 20),
+        _entrada(2, ESTADO_DESCARTADA_POR_MI, 19),
+        _entrada(3, ESTADO_GUARDADA, 10),
+        _entrada(4, ESTADO_DESCARTADA_POR_MI, 3),
+    ]
+
+    assert frases_historial(entradas) == [
+        "guardaste 2 ofertas suyas (la última el 20/08/2026)",
+        "descartaste 2 ofertas suyas (la última el 19/08/2026)",
+    ]
+
+
+def test_la_ultima_aplicacion_se_fecha_por_cuando_se_presento():
+    """El historial se ordena por la última decisión, pero una candidatura se fecha
+    por `aplicada_en`: la primera del grupo no tiene por qué ser la última enviada."""
+    entradas = [
+        _entrada(1, ESTADO_APLICADA, 25, aplicada_dia=2),
+        _entrada(2, ESTADO_APLICADA, 20, aplicada_dia=15),
+    ]
+
+    assert frases_historial(entradas) == ["aplicaste aquí 2 veces (la última el 15/08/2026)"]
+
+
+def test_la_fila_resume_los_descartes_repetidos_con_la_empresa(
+    cliente: TestClient, crea_clasificada, sesion
+):
+    for titulo in ("Primera", "Segunda"):
+        registra_decision(
+            sesion, crea_clasificada(titulo=titulo, empresa="Acme").id,
+            ESTADO_DESCARTADA_POR_MI, "No.",
+        )
+    crea_clasificada(titulo="La nueva", empresa="Acme")
+
+    # El listado por defecto sólo enseña las sin decidir: la única fila es «La nueva».
+    html = cliente.get("/").text
+
+    assert "Ya descartaste 2 ofertas suyas" in html
+    assert "descartaste una oferta suya" not in html
+
+
+def test_una_oferta_sin_empresa_no_hereda_el_historial_de_otras(
+    cliente: TestClient, crea_clasificada, sesion
+):
+    descartada = crea_clasificada(titulo="De alguien", empresa=EMPRESA_DESCONOCIDA)
+    registra_decision(sesion, descartada.id, ESTADO_DESCARTADA_POR_MI, "No.")
+    crea_clasificada(titulo="De otro", empresa=EMPRESA_DESCONOCIDA)
+
+    assert "descartaste" not in cliente.get("/").text
+
+
 def test_una_empresa_sin_historial_no_inventa_aviso(cliente: TestClient, crea_clasificada):
     crea_clasificada(titulo="La nueva", empresa="Empresa Desconocida")
 
@@ -380,6 +468,19 @@ def test_la_lista_vacia_lo_dice_en_vez_de_quedarse_en_blanco(cliente: TestClient
     html = cliente.get("/").text
 
     assert "No hay ofertas" in html
+
+
+def test_por_defecto_se_ven_solo_las_del_ultimo_mes(cliente: TestClient, crea_clasificada):
+    """Es el filtro que el usuario elige casi siempre: arrancar en otro le costaba un
+    clic en cada visita."""
+    crea_clasificada(titulo="De hace dos meses", publicada_en=_hace(60))
+    crea_clasificada(titulo="De esta semana", publicada_en=_hace(5))
+
+    html = cliente.get("/").text
+
+    assert "De esta semana" in html
+    assert "De hace dos meses" not in html
+    assert re.search(r'<option value="30"[^>]*selected', html)
 
 
 def test_por_defecto_se_ocultan_las_publicadas_hace_mas_de_tres_meses(
@@ -464,7 +565,7 @@ def test_el_limite_es_inclusivo(cliente: TestClient, crea_clasificada):
     crea_clasificada(titulo="Justo en el limite", publicada_en=_hace(90))
     crea_clasificada(titulo="Un dia pasada", publicada_en=_hace(91))
 
-    html = cliente.get("/").text
+    html = cliente.get("/?antiguedad=90").text
 
     assert "Justo en el limite" in html
     assert "Un dia pasada" not in html

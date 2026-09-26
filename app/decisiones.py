@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.dedup import normaliza_empresa
 from app.models import Decision, Job, ahora
+from app.schemas import EMPRESA_DESCONOCIDA
 
 ESTADO_GUARDADA = "guardada"
 ESTADO_APLICADA = "aplicada"
@@ -140,6 +141,12 @@ def clave_empresa(empresa: str | None) -> str:
     return normaliza_empresa(empresa)
 
 
+# Claves que no identifican a ninguna empresa: el relleno que ponen las fuentes cuando
+# la oferta no la trae, y el vacío. Agruparlas mezclaría ofertas de empresas distintas
+# y la fila avisaría de un «ya descartaste tres ofertas suyas» que no es de nadie.
+CLAVES_SIN_EMPRESA = frozenset({clave_empresa(EMPRESA_DESCONOCIDA), ""})
+
+
 def historial_por_empresa(
     sesion: Session, ofertas: Iterable[Job]
 ) -> dict[str, list[EntradaHistorial]]:
@@ -152,9 +159,13 @@ def historial_por_empresa(
     Devuelve todas las decisiones de esas empresas, incluida la de la propia
     oferta si la tiene. Usa `historial_de()` para el historial *previo* de una
     oferta concreta.
+
+    Una oferta sin empresa conocida (`CLAVES_SIN_EMPRESA`) tiene su entrada, pero
+    siempre vacía: no hay historial que contar de quien no se sabe quién es.
     """
     claves = {clave_empresa(o.empresa) for o in ofertas}
     historial: dict[str, list[EntradaHistorial]] = {clave: [] for clave in claves}
+    claves -= CLAVES_SIN_EMPRESA
     if not claves:
         return historial
 
@@ -169,7 +180,7 @@ def historial_por_empresa(
     # cientos de decisiones: no compensa duplicar esa lógica en la base de datos.
     for decision, job in filas:
         clave = clave_empresa(job.empresa)
-        if clave not in historial:
+        if clave not in claves:
             continue
         historial[clave].append(
             EntradaHistorial(

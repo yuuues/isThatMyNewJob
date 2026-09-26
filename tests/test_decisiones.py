@@ -17,6 +17,7 @@ from app.decisiones import (
     signo_estado,
 )
 from app.models import Decision, Job
+from app.schemas import EMPRESA_DESCONOCIDA
 
 
 def crea_job(sesion, sufijo: str, empresa: str = "Acme S.L.", titulo: str = "Backend") -> Job:
@@ -265,6 +266,22 @@ def test_el_historial_de_una_oferta_de_empresa_desconocida_no_revienta(sesion):
     job = crea_job(sesion, "1", empresa="Acme")
 
     assert historial_de({}, job) == []
+
+
+@pytest.mark.parametrize("sin_empresa", [EMPRESA_DESCONOCIDA, ""])
+def test_las_ofertas_sin_empresa_no_comparten_historial(sesion, sin_empresa):
+    """«Desconocida» es lo que ponen las fuentes cuando la oferta no trae empresa.
+
+    Dos ofertas así son casi siempre de empresas distintas: agruparlas pintaba
+    «ya descartaste una oferta suya» en ofertas que no tenían nada que ver.
+    """
+    descartada = crea_job(sesion, "1", empresa=sin_empresa, titulo="Backend")
+    nueva = crea_job(sesion, "2", empresa=sin_empresa, titulo="Frontend")
+    registra_decision(sesion, descartada.id, "descartada_por_mi", motivo="no")
+
+    historial = historial_por_empresa(sesion, [nueva])
+
+    assert historial_de(historial, nueva) == []
 
 
 # --- Recuento de candidaturas -----------------------------------------------

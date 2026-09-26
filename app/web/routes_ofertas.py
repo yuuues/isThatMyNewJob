@@ -88,7 +88,10 @@ ESTADO_SIN_DECIDIR = ""
 # son candidaturas enviadas, la más antigua a 88 días. Los datos pedían 180; el usuario
 # eligió 90 sabiendo que eso oculta 23 de las 99 ofertas interesantes, porque el
 # desplegable las recupera con un clic.
-ANTIGUEDAD_POR_DEFECTO = "90"
+#
+# El 26/09/2026 pasó a 30: es el filtro que el usuario elige a mano casi siempre, así
+# que arrancar en 90 le costaba un clic en cada visita. Lo más antiguo sigue a un clic.
+ANTIGUEDAD_POR_DEFECTO = "30"
 
 OPCIONES_ANTIGUEDAD: list[tuple[str, str]] = [
     ("30", "Del último mes"),
@@ -117,6 +120,18 @@ FRASES_HISTORIAL: dict[str, str] = {
     ESTADO_DESCARTADA_POR_MI: "descartaste una oferta suya el {fecha}",
 }
 
+# Lo mismo cuando el estado se repite con la misma empresa: una línea con el recuento
+# y la fecha más reciente, en vez de una por decisión. Tres «descartaste una oferta
+# suya» seguidos ocupan la fila entera y dicen menos que «descartaste 3 ofertas
+# suyas»: el dato es cuántas veces, y cuándo fue la última.
+FRASES_HISTORIAL_REPETIDO: dict[str, str] = {
+    ESTADO_GUARDADA: "guardaste {n} ofertas suyas (la última el {fecha})",
+    ESTADO_APLICADA: "aplicaste aquí {n} veces (la última el {fecha})",
+    ESTADO_EN_PROCESO: "hablas con ellos en {n} procesos (el último desde el {fecha})",
+    ESTADO_RECHAZADO_POR_ELLOS: "te rechazaron {n} veces (la última el {fecha})",
+    ESTADO_DESCARTADA_POR_MI: "descartaste {n} ofertas suyas (la última el {fecha})",
+}
+
 SIN_FECHA = "sin fecha"
 
 
@@ -134,15 +149,49 @@ def _fecha(momento: datetime | None) -> str:
     return momento.strftime("%d/%m/%Y") if momento else SIN_FECHA
 
 
-def frase_historial(entrada: EntradaHistorial) -> str:
-    """Una línea que resuma qué pasó ya con esta empresa.
+def _momento_historial(entrada: EntradaHistorial) -> datetime | None:
+    """Cuándo pasó lo que cuenta la entrada.
 
     Para `aplicada` se usa `aplicada_en`, que es cuándo se presentó, y no la fecha
     del último cambio: si la empresa contesta en octubre, uno no aplicó en octubre.
     """
     momento = entrada.aplicada_en if entrada.estado == ESTADO_APLICADA else entrada.decidida_en
+    return momento or entrada.decidida_en
+
+
+def frase_historial(entrada: EntradaHistorial) -> str:
+    """Una línea que resuma qué pasó ya con esta empresa."""
     plantilla = FRASES_HISTORIAL.get(entrada.estado, "hay una decisión previa del {fecha}")
-    return plantilla.format(fecha=_fecha(momento or entrada.decidida_en))
+    return plantilla.format(fecha=_fecha(_momento_historial(entrada)))
+
+
+def frases_historial(entradas: list[EntradaHistorial]) -> list[str]:
+    """Una línea por estado, con recuento si se repite.
+
+    Los estados salen en el orden en que llega su decisión más reciente —el
+    historial viene de reciente a antigua—, así que lo último que pasó con la
+    empresa sigue siendo lo primero que se lee.
+
+    La fecha de un grupo es la más reciente de sus entradas, no la de la primera:
+    el orden del historial es por fecha de decisión, y para `aplicada` la fecha que
+    se enseña es otra (`aplicada_en`).
+    """
+    por_estado: dict[str, list[EntradaHistorial]] = {}
+    for entrada in entradas:
+        por_estado.setdefault(entrada.estado, []).append(entrada)
+
+    frases = []
+    for estado, grupo in por_estado.items():
+        if len(grupo) == 1:
+            frases.append(frase_historial(grupo[0]))
+            continue
+        momentos = [m for m in map(_momento_historial, grupo) if m is not None]
+        ultima = max(momentos, key=_marca_temporal) if momentos else None
+        plantilla = FRASES_HISTORIAL_REPETIDO.get(
+            estado, "hay {n} decisiones previas (la última del {fecha})"
+        )
+        frases.append(plantilla.format(n=len(grupo), fecha=_fecha(ultima)))
+    return frases
 
 
 def _marca_temporal(momento: datetime | None) -> float:
@@ -188,7 +237,7 @@ def _construye_fila(job: Job, entradas: list[EntradaHistorial]) -> dict:
         "fecha": _fecha(job.publicada_en),
         "cerrada": job.cerrada,
         "cerrada_en": _fecha(job.cerrada_en),
-        "historial": [frase_historial(entrada) for entrada in entradas],
+        "historial": frases_historial(entradas),
     }
 
 

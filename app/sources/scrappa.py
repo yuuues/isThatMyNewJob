@@ -5,7 +5,7 @@ import httpx
 
 from app.limitador import LimitadorPorHost
 from app.presupuesto import Presupuesto, SinLimite
-from app.schemas import Modalidad, RawJob, SearchQuery
+from app.schemas import EMPRESA_DESCONOCIDA, Modalidad, RawJob, SearchQuery
 from app.sources.base import FuenteConFiltroEnServidor
 from app.sources.comun import detecta_modalidad
 from app.sources.remotive import html_a_texto
@@ -118,7 +118,7 @@ class ScrappaSource(FuenteConFiltroEnServidor):
             external_id=str(bruto.get("id") or ""),
             url=bruto.get("apply_url") or "",
             titulo=titulo,
-            empresa=(bruto.get("company") or {}).get("name") or "Desconocida",
+            empresa=(bruto.get("company") or {}).get("name") or EMPRESA_DESCONOCIDA,
             ubicacion=ubicacion.get("formatted") or ubicacion.get("city"),
             modalidad=self._modalidad(ubicacion, atributos, titulo, descripcion),
             salario_texto=self._salario(bruto.get("salary")),
