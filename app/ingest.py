@@ -120,7 +120,9 @@ def ingesta(
                 parcial["recibidas"] = len(ofertas)
 
                 for oferta in ofertas:
-                    clave = hash_dedup(oferta.empresa, oferta.titulo)
+                    clave = hash_dedup(
+                        oferta.empresa, oferta.titulo, oferta.fuente, oferta.external_id
+                    )
                     conocida = _ya_conocida(sesion, oferta, clave)
                     if conocida is not None:
                         _suma_ubicacion(conocida, oferta.ubicacion)

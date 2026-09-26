@@ -89,7 +89,7 @@ class AdzunaSource(FuenteConFiltroEnServidor):
             external_id=str(bruto["id"]),
             url=bruto.get("redirect_url", ""),
             titulo=titulo,
-            empresa=(bruto.get("company") or {}).get("display_name", EMPRESA_DESCONOCIDA),
+            empresa=(bruto.get("company") or {}).get("display_name") or EMPRESA_DESCONOCIDA,
             ubicacion=(bruto.get("location") or {}).get("display_name"),
             modalidad=detecta_modalidad(f"{titulo} {descripcion}"),
             salario_min=salario_min,

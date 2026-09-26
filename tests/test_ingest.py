@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from app.ingest import ingesta
 from app.limitador import sin_espera
 from app.models import Job
-from app.schemas import RawJob, SearchQuery
+from app.schemas import EMPRESA_DESCONOCIDA, RawJob, SearchQuery
 from app.sources.adzuna import AdzunaSource
 from app.sources.adzuna import url_api as url_adzuna
 from app.sources.fake import FakeSource
@@ -126,6 +126,33 @@ def test_la_misma_oferta_en_varias_ciudades_es_una_sola_fila(sesion):
     assert sesion.scalar(select(func.count()).select_from(Job)) == 1
     assert stats["fake"]["nuevas"] == 1
     assert stats["fake"]["duplicadas"] == 3
+
+
+def test_dos_ofertas_sin_empresa_con_el_mismo_titulo_son_dos_filas(sesion):
+    """Sin empresa, empresa+título no identifica nada: la segunda oferta se perdía
+    como duplicada de la primera aunque fuera de otra empresa."""
+    fuente = FakeSource(
+        [
+            raw("1", empresa=EMPRESA_DESCONOCIDA, titulo="Senior Backend Developer"),
+            raw("2", empresa=EMPRESA_DESCONOCIDA, titulo="Senior Backend Developer"),
+        ]
+    )
+
+    stats = ingesta(sesion, [fuente], [SearchQuery(nombre="x", texto="x")])
+
+    assert sesion.scalar(select(func.count()).select_from(Job)) == 2
+    assert stats["fake"]["nuevas"] == 2
+
+
+def test_una_oferta_sin_empresa_ya_vista_sigue_siendo_duplicada(sesion):
+    fuente = FakeSource([raw("1", empresa=EMPRESA_DESCONOCIDA)])
+    query = [SearchQuery(nombre="x", texto="x")]
+
+    ingesta(sesion, [fuente], query)
+    stats = ingesta(sesion, [fuente], query)
+
+    assert sesion.scalar(select(func.count()).select_from(Job)) == 1
+    assert stats["fake"]["duplicadas"] == 1
 
 
 def test_el_duplicado_aporta_su_ubicacion_a_la_fila_que_se_conserva(sesion):

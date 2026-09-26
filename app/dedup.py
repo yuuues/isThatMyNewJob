@@ -2,6 +2,8 @@ import hashlib
 import re
 import unicodedata
 
+from app.schemas import EMPRESA_DESCONOCIDA
+
 _FORMAS_JURIDICAS = {
     "sl", "slu", "sa", "sau", "sociedad", "limitada",
     "inc", "llc", "ltd", "ltda", "corp", "gmbh", "ag", "bv", "nv", "srl", "spa", "oy", "ab",
@@ -32,7 +34,16 @@ def normaliza_empresa(empresa: str | None) -> str:
     return " ".join(palabras)
 
 
-def hash_dedup(empresa: str | None, titulo: str | None) -> str:
+# Claves que no identifican a ninguna empresa: el relleno que ponen las fuentes cuando
+# la oferta no la trae, y el vacío. Quien agrupe por empresa —la deduplicación, el
+# historial por empresa— tiene que tratarlas como ausencia de dato: agruparlas mezcla
+# ofertas de empresas distintas.
+CLAVES_SIN_EMPRESA = frozenset({normaliza_empresa(EMPRESA_DESCONOCIDA), ""})
+
+
+def hash_dedup(
+    empresa: str | None, titulo: str | None, fuente: str, external_id: str
+) -> str:
     """Clave canónica de una oferta, independiente de la fuente que la sirvió.
 
     La ubicación NO entra en la clave, aunque el spec la incluía. Es el campo menos
@@ -50,8 +61,20 @@ def hash_dedup(empresa: str | None, titulo: str | None) -> str:
     El coste asumido: dos vacantes distintas de la misma empresa con el mismo título en
     ciudades distintas colapsan en una. Se prefiere a lo contrario porque la ubicación
     no se pierde — se acumula en `Job.ubicaciones` — y el prefiltro las mira todas.
+
+    Sin empresa conocida (`CLAVES_SIN_EMPRESA`) la clave es la de la fuente,
+    `fuente` + `external_id`: dos «Desconocida» con el mismo título son casi siempre de
+    empresas distintas, y con empresa+título la segunda se perdía como duplicada. El
+    coste asumido: sin empresa ya no se reconoce la misma oferta llegada por otra fuente
+    ni republicada por Adzuna en otra provincia. Se prefiere una fila de más a perder
+    una oferta sin enterarse. La clave lleva un separador más que la de empresa+título,
+    cuyas partes normalizadas no pueden contener '|', así que las dos nunca coinciden.
     """
-    partes = [normaliza_empresa(empresa), normaliza(titulo)]
+    clave_empresa = normaliza_empresa(empresa)
+    if clave_empresa in CLAVES_SIN_EMPRESA:
+        partes = ["sin-empresa", fuente, external_id]
+    else:
+        partes = [clave_empresa, normaliza(titulo)]
     return hashlib.sha256("|".join(partes).encode("utf-8")).hexdigest()
 
 
