@@ -16,9 +16,9 @@ tabla de rutas del spec.
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -49,6 +49,11 @@ SIN_MOTIVO = "sin motivo registrado"
 ESTADO_DESCARTADA_POR_REGLA = "descartada_por_regla"
 ESTADO_ERROR = "error"
 ESTADO_PENDIENTE = "pendiente"
+
+# Con el run diario más los que se lanzan a mano, el histórico crece sin techo y pintarlo
+# entero convierte la vista en un scroll infinito que tapa los descartes de debajo.
+# Veinte es casi un mes de runs diarios: lo que se suele querer comparar de un vistazo.
+RUNS_POR_PAGINA = 20
 
 
 def periodo_actual(ahora: datetime | None = None) -> str:
@@ -149,8 +154,26 @@ def _totales(run: Run) -> dict:
     }
 
 
-def _runs(sesion: Session) -> list[dict]:
-    filas = sesion.scalars(select(Run).order_by(Run.inicio.desc(), Run.id.desc())).all()
+def _paginacion(sesion: Session, pagina: int) -> dict:
+    """Página pedida, recortada al rango que existe, y cuántas hay en total.
+
+    Se recorta en vez de responder 404 o 422: un enlace guardado a la página 9 cuando
+    ya sólo quedan 8 —o un `?pagina=0` escrito a mano— tiene que seguir enseñando
+    runs. Sin runs hay una página, vacía, y no cero: la vista siempre tiene algo que
+    pintar, aunque sea el aviso de que no se ha ejecutado ninguno.
+    """
+    total = sesion.scalar(select(func.count()).select_from(Run)) or 0
+    paginas = max(1, -(-total // RUNS_POR_PAGINA))
+    return {"pagina": min(max(1, pagina), paginas), "paginas": paginas}
+
+
+def _runs(sesion: Session, pagina: int) -> list[dict]:
+    filas = sesion.scalars(
+        select(Run)
+        .order_by(Run.inicio.desc(), Run.id.desc())
+        .offset((pagina - 1) * RUNS_POR_PAGINA)
+        .limit(RUNS_POR_PAGINA)
+    ).all()
     return [
         {
             "id": run.id,
@@ -197,15 +220,19 @@ def _fallidas(sesion: Session) -> list[Job]:
     )
 
 
-def _pagina(request: Request, sesion: Session, aviso: str | None = None) -> HTMLResponse:
+def _pagina(
+    request: Request, sesion: Session, pagina: int = 1, aviso: str | None = None
+) -> HTMLResponse:
+    paginacion = _paginacion(sesion, pagina)
     return get_plantillas().TemplateResponse(
         request,
         "runs.html",
         {
             "titulo": "Ejecuciones",
-            "cerradas": cerradas_por_fuente(sesion),
+            "ofertas_por_fuente": cerradas_por_fuente(sesion),
             "cupos": _cupos(sesion),
-            "runs": _runs(sesion),
+            "paginacion": paginacion,
+            "runs": _runs(sesion, paginacion["pagina"]),
             "descartes": _descartes(sesion),
             "fallidas": _fallidas(sesion),
             "aviso": aviso,
@@ -230,13 +257,23 @@ def _oferta_en_estado(sesion: Session, job_id: int, estado: str, explicacion: st
 
 
 @router.get("/runs", response_class=HTMLResponse)
-def historico(request: Request, sesion: Session = Depends(get_sesion)) -> HTMLResponse:
-    return _pagina(request, sesion)
+def historico(
+    request: Request, pagina: int = Query(default=1), sesion: Session = Depends(get_sesion)
+) -> HTMLResponse:
+    return _pagina(request, sesion, pagina)
+
+
+# Las dos acciones reciben la página del histórico en la URL porque responden con la
+# vista entera: sin ella, devolver una oferta a la cola desde la página 3 te mandaría
+# de vuelta a la 1 sin haber pedido cambiar de página.
 
 
 @router.post("/runs/descartes/{job_id}/reencolar", response_class=HTMLResponse)
 def reencolar(
-    request: Request, job_id: int, sesion: Session = Depends(get_sesion)
+    request: Request,
+    job_id: int,
+    pagina: int = Query(default=1),
+    sesion: Session = Depends(get_sesion),
 ) -> HTMLResponse:
     """Devuelve a la cola una oferta descartada por una regla que no debía aplicarle.
 
@@ -256,13 +293,17 @@ def reencolar(
     return _pagina(
         request,
         sesion,
+        pagina,
         aviso=f"«{oferta.titulo}» vuelve a la cola: se clasificará en el próximo run.",
     )
 
 
 @router.post("/runs/errores/{job_id}/reintentar", response_class=HTMLResponse)
 def reintentar(
-    request: Request, job_id: int, sesion: Session = Depends(get_sesion)
+    request: Request,
+    job_id: int,
+    pagina: int = Query(default=1),
+    sesion: Session = Depends(get_sesion),
 ) -> HTMLResponse:
     """Devuelve a la cola una oferta que agotó los intentos de clasificación.
 
@@ -282,5 +323,6 @@ def reintentar(
     return _pagina(
         request,
         sesion,
+        pagina,
         aviso=f"«{oferta.titulo}» vuelve a la cola con los intentos a cero.",
     )
