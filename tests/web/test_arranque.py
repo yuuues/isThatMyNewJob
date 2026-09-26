@@ -72,6 +72,19 @@ def test_la_hoja_de_estilo_se_sirve_desde_static(cliente: TestClient):
     assert respuesta.content
 
 
+def test_el_script_de_columnas_se_sirve_y_lo_carga_la_plantilla(cliente: TestClient):
+    """Las columnas del listado se redimensionan arrastrando con un script propio.
+
+    Si la plantilla lo enlaza y el fichero no está, no hay error visible: los bordes
+    simplemente dejan de arrastrarse.
+    """
+    respuesta = cliente.get("/static/columnas.js")
+
+    assert respuesta.status_code == 200
+    assert "anchos-columnas-lista" in respuesta.text
+    assert 'src="/static/columnas.js"' in cliente.get("/").text
+
+
 def test_pico_se_sirve_desde_static(cliente: TestClient):
     """Pico es el framework de estilos y, como HTMX, se sirve en local."""
     respuesta = cliente.get("/static/pico.min.css")

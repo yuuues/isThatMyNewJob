@@ -43,6 +43,44 @@
       {% endif %}
     </p>
   {% endfor %}
+
+  {# Va en la cabecera, con los cupos, porque es la otra cifra que decide qué fuentes
+     merecen seguir activas: una que sirve ofertas ya cerradas hace perder el tiempo
+     —se abren, se leen y no llevan a ninguna parte— y este recuento permite retirarla
+     con datos en vez de por sensación. Enseña el total además de las cerradas porque
+     una proporción sin su base no dice nada: 3 de 5 no es lo mismo que 3 de 500.
+
+     Queda fuera de <main>, así que las acciones de HTMX no la refrescan. No lo
+     necesitan: reencolar o reintentar no cambia cuántas ofertas trae ni cierra ninguna. #}
+  <article>
+    <h2>Ofertas por fuente</h2>
+    {% if ofertas_por_fuente %}
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Fuente</th>
+            <th scope="col">Total</th>
+            <th scope="col">Cerradas</th>
+            <th scope="col">Proporción cerradas</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for fuente, dato in ofertas_por_fuente | dictsort %}
+            <tr>
+              <th scope="row">{{ fuente }}</th>
+              <td>{{ dato.total }}</td>
+              <td>{{ dato.cerradas }}</td>
+              <td>
+                {% if dato.total %}{{ (dato.cerradas * 100 // dato.total) }}%{% else %}—{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <p><small>Todavía no hay ofertas ingeridas.</small></p>
+    {% endif %}
+  </article>
 {% endblock %}
 
 {% block contenido %}
@@ -54,8 +92,10 @@
 
   <section>
     <h2>Histórico</h2>
+    {# Sólo se abre el primero de la página 1: es el run más reciente. En las demás
+       páginas el primero es uno cualquiera y abrirlo sólo empujaría la lista. #}
     {% for run in runs %}
-      <details {% if loop.first %}open{% endif %}>
+      <details {% if loop.first and paginacion.pagina == 1 %}open{% endif %}>
         <summary>
           {{ run.inicio.strftime("%d/%m/%Y %H:%M") }} →
           {% if run.fin %}{{ run.fin.strftime("%d/%m/%Y %H:%M") }}{% else %}<mark>En curso</mark>{% endif %}
@@ -126,6 +166,29 @@
     {% else %}
       <p><small>Todavía no se ha ejecutado ningún run.</small></p>
     {% endfor %}
+
+    {# Enlaces normales y no HTMX: cambiar de página recarga también la cabecera, que
+       así enseña los cupos al día. Pico pone la primera <ul> a la izquierda y la
+       segunda a la derecha, que es donde se espera cada sentido. #}
+    {% if paginacion.paginas > 1 %}
+      <nav aria-label="Páginas del histórico">
+        <ul>
+          <li>
+            {% if paginacion.pagina > 1 %}
+              <a href="/runs?pagina={{ paginacion.pagina - 1 }}">← Más recientes</a>
+            {% endif %}
+          </li>
+        </ul>
+        <ul>
+          <li><small>Página {{ paginacion.pagina }} de {{ paginacion.paginas }}</small></li>
+          <li>
+            {% if paginacion.pagina < paginacion.paginas %}
+              <a href="/runs?pagina={{ paginacion.pagina + 1 }}">Más antiguas →</a>
+            {% endif %}
+          </li>
+        </ul>
+      </nav>
+    {% endif %}
   </section>
 
   <section>
@@ -163,8 +226,8 @@
                 <td>
                   <form
                     method="post"
-                    action="/runs/descartes/{{ oferta.id }}/reencolar"
-                    hx-post="/runs/descartes/{{ oferta.id }}/reencolar"
+                    action="/runs/descartes/{{ oferta.id }}/reencolar?pagina={{ paginacion.pagina }}"
+                    hx-post="/runs/descartes/{{ oferta.id }}/reencolar?pagina={{ paginacion.pagina }}"
                     hx-target="#contenido"
                     hx-select="#contenido"
                     hx-swap="outerHTML"
@@ -211,8 +274,8 @@
               <td>
                 <form
                   method="post"
-                  action="/runs/errores/{{ oferta.id }}/reintentar"
-                  hx-post="/runs/errores/{{ oferta.id }}/reintentar"
+                  action="/runs/errores/{{ oferta.id }}/reintentar?pagina={{ paginacion.pagina }}"
+                  hx-post="/runs/errores/{{ oferta.id }}/reintentar?pagina={{ paginacion.pagina }}"
                   hx-target="#contenido"
                   hx-select="#contenido"
                   hx-swap="outerHTML"
@@ -228,37 +291,4 @@
       <p><small>Ninguna oferta atascada.</small></p>
     {% endif %}
   </section>
-
-<article>
-  <h2>Ofertas cerradas por fuente</h2>
-  <p>
-    <small>
-      Una oferta que ya no existe cuando abres el enlace hace perder el tiempo: se
-      abre, se lee y no lleva a ninguna parte. Este recuento dice qué fuente sirve
-      ofertas caducadas, para poder retirarla con datos en vez de por sensación.
-    </small>
-  </p>
-  {% if cerradas %}
-  <table>
-    <thead>
-      <tr><th>Fuente</th><th>Cerradas</th><th>Total</th><th>Proporción</th></tr>
-    </thead>
-    <tbody>
-      {% for fuente, dato in cerradas | dictsort %}
-      <tr>
-        <td>{{ fuente }}</td>
-        <td>{{ dato.cerradas }}</td>
-        <td>{{ dato.total }}</td>
-        <td>
-          {% if dato.total %}{{ (dato.cerradas * 100 // dato.total) }}%{% else %}—{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-  <p><small>Todavía no hay ofertas ingeridas.</small></p>
-  {% endif %}
-</article>
-
 {% endblock %}

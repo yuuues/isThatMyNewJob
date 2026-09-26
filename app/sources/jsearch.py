@@ -6,7 +6,7 @@ import httpx
 
 from app.limitador import LimitadorPorHost
 from app.presupuesto import Presupuesto, SinLimite
-from app.schemas import RawJob, SearchQuery
+from app.schemas import EMPRESA_DESCONOCIDA, RawJob, SearchQuery
 from app.sources.base import FuenteConFiltroEnServidor
 from app.sources.comun import detecta_modalidad
 
@@ -152,7 +152,7 @@ class JSearchSource(FuenteConFiltroEnServidor):
             external_id=str(bruto.get("job_id") or bruto.get("job_uid") or ""),
             url=bruto.get("job_apply_link") or "",
             titulo=titulo,
-            empresa=bruto.get("employer_name") or "Desconocida",
+            empresa=bruto.get("employer_name") or EMPRESA_DESCONOCIDA,
             ubicacion=limpia_ubicacion(bruto.get("job_location")),
             modalidad=self._modalidad(bruto, titulo, descripcion),
             salario_min=salario_min,

@@ -75,6 +75,46 @@ thead th {
   background-color: var(--pico-background-color);
 }
 
+/* Reparto de columnas del listado (`_lista.html`: Oferta, Dónde, Origen, Por qué,
+   Decisión). Con el reparto automático «Por qué» se quedaba casi todo el ancho y
+   «Oferta» partía el título y los avisos de historial en tres o cuatro líneas: la
+   fila crecía por la columna estrecha, no por la ancha. Medido en 1580 px, dar a
+   «Oferta» el 26% bajó la tabla de «Aplicar ya» de 673 a 613 px y la de «Revisar»
+   de 333 a 292. «Por qué» se queda con lo que sobra. Va por posición porque la
+   tabla no lleva clases: si se reordenan las columnas, hay que tocar esto.
+
+   Es el reparto por defecto: si el usuario arrastra un borde, `columnas.js` lo
+   sobreescribe con estilos en línea y lo recuerda en su navegador. */
+#lista th:nth-child(1) {
+  width: 26%;
+}
+
+#lista th:nth-child(2) {
+  width: 12%;
+}
+
+#lista th:nth-child(3) {
+  width: 7%;
+}
+
+/* Borde arrastrable que añade `columnas.js` a cada cabecera del listado. Es un
+   atributo y no una clase porque lo crea el script, no la plantilla. La cabecera ya
+   es `sticky`, que cuenta como posicionada, así que el tirador se coloca respecto a
+   ella sin tocarle el `position`. */
+#lista th [data-tirador] {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 0.5rem;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+#lista th [data-tirador]:hover {
+  border-right: 2px solid var(--pico-primary);
+}
+
 /* Texto secundario (fuente, fecha, razonamiento). `small` es semántico y Pico ya
    lo reduce; aquí sólo se apaga el color para que no compita con el título. */
 small {

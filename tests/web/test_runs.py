@@ -12,7 +12,7 @@ Nada de aquí toca `data/app.db` ni la red: la sesión es la de memoria del
 """
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -508,5 +508,105 @@ def test_la_vista_cuenta_las_ofertas_cerradas_por_fuente(cliente: TestClient, se
 
     texto = cliente.get("/runs").text
 
-    assert "Ofertas cerradas por fuente" in texto
+    assert "Ofertas por fuente" in texto
     assert "adzuna" in texto
+
+
+def test_las_ofertas_por_fuente_van_en_la_cabecera_con_total_y_cerradas(
+    cliente: TestClient, sesion, crea_oferta
+):
+    """Van junto a los cupos, antes del histórico: son las cifras que deciden qué
+    fuentes siguen activas. Y con el total al lado, que una proporción sin su base no
+    distingue 2 de 3 de 2 de 300."""
+    from app.cerradas import cierra_oferta
+
+    cierra_oferta(sesion, crea_oferta(fuente="adzuna").id)
+    cierra_oferta(sesion, crea_oferta(fuente="adzuna").id)
+    crea_oferta(fuente="adzuna")
+
+    html = cliente.get("/runs").text
+    cabecera = html[html.index("<header") : html.index("</header>")]
+
+    assert "Ofertas por fuente" in cabecera
+    fila = re.search(r"<tr>\s*<th scope=\"row\">adzuna</th>(.*?)</tr>", cabecera, re.S)
+    assert fila, cabecera
+    assert _texto(fila.group(1)) == "3 2 66%"
+
+
+# --- Paginación del histórico ------------------------------------------------
+
+
+def _crea_runs(sesion, cuantos: int) -> None:
+    """Un run por día, el n-ésimo con la fuente `fuenteN` para poder buscarlo."""
+    for n in range(cuantos):
+        _crea_run(
+            sesion,
+            inicio=datetime(2026, 1, 1, 7, 0) + timedelta(days=n),
+            fin=None,
+            stats={f"fuente{n:02d}": {"nuevas": 1}},
+        )
+
+
+def test_el_historico_ensena_solo_una_pagina_de_runs(cliente: TestClient, sesion):
+    _crea_runs(sesion, routes_runs.RUNS_POR_PAGINA + 5)
+
+    html = cliente.get("/runs").text
+
+    # El más reciente es el último creado; el primero que se queda fuera, el 4.
+    ultimo = routes_runs.RUNS_POR_PAGINA + 4
+    assert f"fuente{ultimo:02d}" in html
+    assert "fuente05" in html
+    assert "fuente04" not in html
+    assert 'href="/runs?pagina=2"' in html
+    assert "Página 1 de 2" in _texto(html)
+
+
+def test_la_segunda_pagina_trae_los_runs_mas_antiguos(cliente: TestClient, sesion):
+    _crea_runs(sesion, routes_runs.RUNS_POR_PAGINA + 5)
+
+    html = cliente.get("/runs?pagina=2").text
+
+    assert "fuente04" in html and "fuente00" in html
+    assert "fuente05" not in html
+    assert 'href="/runs?pagina=1"' in html
+    assert "pagina=3" not in html
+
+
+def test_una_pagina_fuera_de_rango_se_recorta_a_la_que_existe(cliente: TestClient, sesion):
+    """Un enlace guardado a una página que ya no existe sigue enseñando runs."""
+    _crea_runs(sesion, routes_runs.RUNS_POR_PAGINA + 5)
+
+    assert "fuente00" in cliente.get("/runs?pagina=99").text
+    assert "fuente00" not in cliente.get("/runs?pagina=0").text
+    assert cliente.get("/runs?pagina=0").status_code == 200
+
+
+def test_con_una_sola_pagina_no_hay_navegacion(cliente: TestClient, sesion):
+    _crea_runs(sesion, 3)
+
+    assert "Páginas del histórico" not in cliente.get("/runs").text
+
+
+def test_solo_se_despliega_el_run_mas_reciente_de_la_primera_pagina(
+    cliente: TestClient, sesion
+):
+    _crea_runs(sesion, routes_runs.RUNS_POR_PAGINA + 5)
+
+    assert "<details open" in cliente.get("/runs").text
+    assert "<details open" not in cliente.get("/runs?pagina=2").text
+
+
+def test_devolver_a_la_cola_conserva_la_pagina_del_historico(
+    cliente: TestClient, sesion, crea_oferta
+):
+    """La acción responde con la vista entera: sin la página, te devolvería a la 1."""
+    _crea_runs(sesion, routes_runs.RUNS_POR_PAGINA + 5)
+    oferta = crea_oferta(estado_clasificacion="descartada_por_regla", motivo_regla="veto")
+
+    html = cliente.get("/runs?pagina=2").text
+    assert f"/runs/descartes/{oferta.id}/reencolar?pagina=2" in html
+
+    respuesta = cliente.post(f"/runs/descartes/{oferta.id}/reencolar?pagina=2")
+
+    assert "fuente00" in respuesta.text
+    assert "Página 2 de 2" in _texto(respuesta.text)

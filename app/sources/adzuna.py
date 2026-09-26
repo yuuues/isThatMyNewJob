@@ -3,7 +3,7 @@ from datetime import datetime
 import httpx
 
 from app.limitador import LimitadorPorHost
-from app.schemas import RawJob, SearchQuery
+from app.schemas import EMPRESA_DESCONOCIDA, RawJob, SearchQuery
 from app.sources.base import FuenteConFiltroEnServidor
 from app.sources.comun import detecta_modalidad, salario_anual
 
@@ -89,7 +89,7 @@ class AdzunaSource(FuenteConFiltroEnServidor):
             external_id=str(bruto["id"]),
             url=bruto.get("redirect_url", ""),
             titulo=titulo,
-            empresa=(bruto.get("company") or {}).get("display_name", "Desconocida"),
+            empresa=(bruto.get("company") or {}).get("display_name", EMPRESA_DESCONOCIDA),
             ubicacion=(bruto.get("location") or {}).get("display_name"),
             modalidad=detecta_modalidad(f"{titulo} {descripcion}"),
             salario_min=salario_min,
