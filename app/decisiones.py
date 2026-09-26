@@ -12,9 +12,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.dedup import normaliza_empresa
+from app.dedup import CLAVES_SIN_EMPRESA, normaliza_empresa
 from app.models import Decision, Job, ahora
-from app.schemas import EMPRESA_DESCONOCIDA
 
 ESTADO_GUARDADA = "guardada"
 ESTADO_APLICADA = "aplicada"
@@ -139,12 +138,6 @@ def clave_empresa(empresa: str | None) -> str:
     que 'Acme S.L.' y 'ACME SL' cuenten como la misma empresa aquí y allí.
     """
     return normaliza_empresa(empresa)
-
-
-# Claves que no identifican a ninguna empresa: el relleno que ponen las fuentes cuando
-# la oferta no la trae, y el vacío. Agruparlas mezclaría ofertas de empresas distintas
-# y la fila avisaría de un «ya descartaste tres ofertas suyas» que no es de nadie.
-CLAVES_SIN_EMPRESA = frozenset({clave_empresa(EMPRESA_DESCONOCIDA), ""})
 
 
 def historial_por_empresa(

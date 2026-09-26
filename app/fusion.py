@@ -84,7 +84,8 @@ def fusiona_duplicados(sesion: Session) -> ResumenFusion:
 
     grupos: dict[str, list[Job]] = {}
     for job in sesion.scalars(select(Job)).all():
-        grupos.setdefault(hash_dedup(job.empresa, job.titulo), []).append(job)
+        clave = hash_dedup(job.empresa, job.titulo, job.fuente, job.external_id)
+        grupos.setdefault(clave, []).append(job)
 
     fusionados = 0
     borradas = 0

@@ -6,7 +6,7 @@ import pytest
 import respx
 
 from app.limitador import sin_espera
-from app.schemas import SearchQuery
+from app.schemas import EMPRESA_DESCONOCIDA, SearchQuery
 from app.sources.adzuna import AdzunaSource, detecta_modalidad, url_api
 
 # El `encoding` es obligatorio, no cosmético: `read_text()` a secas usa la codificación
@@ -47,6 +47,25 @@ def test_normaliza_una_oferta_al_esquema_comun():
     assert primera.salario_min == 36000
     assert primera.salario_max == 45000
     assert primera.url == "https://www.adzuna.es/details/5742309584"
+
+
+@pytest.mark.parametrize(
+    "company",
+    [{"display_name": None}, {"display_name": ""}, {}, None],
+    ids=["display_name-null", "display_name-vacio", "sin-display_name", "company-null"],
+)
+@respx.mock
+def test_sin_empresa_usa_el_relleno_comun(company):
+    """Un `display_name` a null no puede llegar a `RawJob.empresa`: falla la validación
+    y el rollback se lleva la búsqueda entera, no sólo esta oferta."""
+    bruto = {**FIXTURE["results"][0], "company": company}
+    respx.get(url_api("es")).mock(
+        return_value=httpx.Response(200, json={**FIXTURE, "results": [bruto]})
+    )
+
+    ofertas = fuente().search(SearchQuery(nombre="php", texto="php"))
+
+    assert ofertas[0].empresa == EMPRESA_DESCONOCIDA
 
 
 @respx.mock

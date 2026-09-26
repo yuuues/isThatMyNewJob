@@ -3,6 +3,7 @@ from datetime import datetime
 from app.dedup import hash_dedup
 from app.fusion import fusiona_duplicados
 from app.models import Clasificacion, Decision, Job
+from app.schemas import EMPRESA_DESCONOCIDA
 
 
 def job(sufijo: str, **kwargs) -> Job:
@@ -155,9 +156,31 @@ def test_recalcula_la_clave_tambien_de_las_ofertas_sin_duplicado(sesion):
     resumen = fusiona_duplicados(sesion)
 
     fila = sesion.query(Job).one()
-    assert fila.hash_dedup == hash_dedup("PayXpert", "Data Engineer")
+    assert fila.hash_dedup == hash_dedup("PayXpert", "Data Engineer", "adzuna", "ext-solo")
     assert resumen.grupos == 0
     assert resumen.borradas == 0
+
+
+def test_no_funde_ofertas_sin_empresa_por_compartir_titulo(sesion):
+    """Es la reclave de las filas «Desconocida» guardadas con la clave vieja: cada una
+    pasa a su clave propia y ninguna se borra."""
+    sesion.add_all(
+        [
+            job("a", empresa=EMPRESA_DESCONOCIDA, fuente="scrappa"),
+            job("b", empresa=EMPRESA_DESCONOCIDA, fuente="scrappa"),
+        ]
+    )
+    sesion.commit()
+
+    resumen = fusiona_duplicados(sesion)
+
+    assert sesion.query(Job).count() == 2
+    assert resumen.borradas == 0
+    assert resumen.reclaveadas == 2
+    assert {j.hash_dedup for j in sesion.query(Job)} == {
+        hash_dedup(EMPRESA_DESCONOCIDA, "Senior Backend Developer - Php", "scrappa", "ext-a"),
+        hash_dedup(EMPRESA_DESCONOCIDA, "Senior Backend Developer - Php", "scrappa", "ext-b"),
+    }
 
 
 def test_es_idempotente(sesion):
